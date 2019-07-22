@@ -1,0 +1,36 @@
+{
+    "scenes": [
+        {
+            "name": "Chess",
+            "directory": "..\\media\\Chess\\",
+            "filename": "scene.gltf",
+            "toneMapper": 2,
+            "iblFactor": 0,
+            "emmisiveFactor": 30,
+            "intensity": 10,
+            "exposure": 1,
+            "camera": {
+                "yaw": 1.2,
+                "pitch": 0.15,
+                "distance": 1.0,
+                "lookAt": [ 0, 0, 0 ]
+            }
+        },
+        {
+            "name": "BusterDrone",
+            "directory": "..\\media\\buster_drone\\",
+            "filename": "busterDrone.gltf",
+            "toneMapper": 2,
+            "iblFactor": 0.3,
+            "emmisiveFactor": 30,
+            "intensity": 50,
+            "exposure": 1,
+            "camera": {
+                "yaw": 0,
+                "pitch": 0,
+                "distance": 3.5,
+                "lookAt": [ 0, 0, 0 ]
+            }
+        }
+    ]
+}

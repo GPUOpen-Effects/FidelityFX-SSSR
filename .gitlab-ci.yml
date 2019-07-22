@@ -1,0 +1,79 @@
+variables:
+  SampleName: SSSRSample  
+  SolutionDirDX12: sample\build\DX12  
+  SolutionDX12: SSSRSample_DX12.sln
+  GIT_SUBMODULE_STRATEGY: normal
+
+before_script:
+  - 'for /f "usebackq delims=" %%i in (`vswhere.exe -version "[15.0,16.0)" -products Microsoft.VisualStudio.Product.BuildTools -property installationPath`) do set MSBUILD_PATH=%%i'
+  - 'call "%MSBUILD_PATH%\VC\Auxiliary\Build\vcvars64.bat"'
+  - 'cd sample\build'
+  - 'call GenerateSolutions.bat -T v141'
+  - 'cd ..\..'
+  
+stages:
+  - build
+  - deploy
+
+build d3d12 sample release:
+  tags:
+  - windows
+  - amd64
+  stage: deploy
+  except:
+  - tags  
+  script:
+  - echo Building "%SolutionDX12%"
+  - cd %SolutionDirDX12%
+  - 'msbuild.exe "%SolutionDX12%" /p:Configuration=Release /p:Platform=x64'
+  - cd ../../..
+  - mkdir %SampleName%
+  - copy sample\src\Common bin
+  - move sample\bin %SampleName%
+  - move sample\media %SampleName%
+  - move sample\README.md %SampleName%
+  - move sample\screenshot.png %SampleName%
+  - move NOTICES.txt %SampleName%
+  - echo cd .\%SampleName%\bin\ > %SampleName%_DX12.bat
+  - echo start %SampleName%_DX12.exe >> %SampleName%_DX12.bat  
+  artifacts:
+      name: "%SampleName%-%CI_COMMIT_REF_NAME%-%CI_COMMIT_SHORT_SHA%"
+      paths:
+      - "%SampleName%/bin/"
+      - "%SampleName%/media/"
+      - "%SampleName%/NOTICES.txt"
+      - "%SampleName%/README.md"
+      - "%SampleName%/screenshot.png"
+      - "%SampleName%_DX12.bat"
+  
+build d3d12 sample release tagged:
+  tags:
+  - windows
+  - amd64
+  stage: deploy
+  only:
+  - tags  
+  script:
+  - echo Building "%SolutionDX12%"
+  - cd %SolutionDirDX12%
+  - 'msbuild.exe "%SolutionDX12%" /p:Configuration=Release /p:Platform=x64'
+  - cd ../../..
+  - mkdir %SampleName%
+  - copy sample\src\Common bin
+  - move sample\bin %SampleName%
+  - move sample\media %SampleName%
+  - move sample\README.md %SampleName%
+  - move sample\screenshot.png %SampleName%
+  - move NOTICES.txt %SampleName%
+  - echo cd .\%SampleName%\bin\ > %SampleName%_DX12.bat
+  - echo start %SampleName%_DX12.exe >> %SampleName%_DX12.bat  
+  artifacts:
+      name: "%SampleName%-%CI_COMMIT_TAG%"
+      paths:
+      - "%SampleName%/bin/"
+      - "%SampleName%/media/"
+      - "%SampleName%/NOTICES.txt"
+      - "%SampleName%/README.md"
+      - "%SampleName%/screenshot.png"
+      - "%SampleName%_DX12.bat"
+  

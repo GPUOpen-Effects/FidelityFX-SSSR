@@ -1,0 +1,11 @@
+Notices and licenses file
+_________________________
+
+Dependencies on www.hdrlabs.com (CC Attribution Share Alike 3.0) 
+# PaperMill Ruins E
+## License Information
+Free set "Papermill Ruins E" by Blochi from www.hdrlabs.com SiBL archive
+Licensed under Creative Commons Attribution Share Alike 3.0 license 
+
+lavadragon-busterdrone v-u (CC BY 4.0) 
+Buster Drone by LaVADraGoN, published under a [Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/) license
