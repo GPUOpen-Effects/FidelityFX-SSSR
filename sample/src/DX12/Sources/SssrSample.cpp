@@ -22,18 +22,18 @@ THE SOFTWARE.
 
 #include "stdafx.h"
 
-#include "SSSRSample.h"
+#include "SssrSample.h"
 
 const bool VALIDATION_ENABLED = false;
 
-SSSRSample::SSSRSample(LPCSTR name) : FrameworkWindows(name)
+SssrSample::SssrSample(LPCSTR name) : FrameworkWindows(name)
 {
     m_LastFrameTime = MillisecondsNow();
     m_Time = 0;
     m_bPlay = true;
     m_bShowUI = true;
 
-    m_CameraControlSelected = 2; // select cam #0 on start up
+    m_CameraControlSelected = 0; // select WASD on start up
 
     m_pGltfLoader = NULL;
 }
@@ -43,7 +43,7 @@ SSSRSample::SSSRSample(LPCSTR name) : FrameworkWindows(name)
 // OnCreate
 //
 //--------------------------------------------------------------------------------------
-void SSSRSample::OnCreate(HWND hWnd)
+void SssrSample::OnCreate(HWND hWnd)
 {
     if (!LoadConfiguration())
     {
@@ -59,7 +59,7 @@ void SSSRSample::OnCreate(HWND hWnd)
 
     // Create Device
     //
-    m_Device.OnCreate("SSSRSample", "Cauldron", VALIDATION_ENABLED, hWnd);
+    m_Device.OnCreate("SssrSample", "Cauldron", VALIDATION_ENABLED, hWnd);
     m_Device.CreatePipelineCache();
 
     //init the shader compiler
@@ -93,6 +93,7 @@ void SSSRSample::OnCreate(HWND hWnd)
     m_State.iblFactor = 1.0f;
     m_State.bDrawBoundingBoxes = false;
     m_State.bDrawLightFrustum = false;
+    m_State.bDrawBloom = false;
     m_State.camera.LookAt(m_Yaw, m_Pitch, m_Distance, XMVectorSet(0, 0, 0, 0));
     m_State.lightIntensity = 10.f;
     m_State.lightCamera.SetFov(XM_PI / 6.0f, 1024, 1024, 0.1f, 20.0f);
@@ -118,7 +119,7 @@ void SSSRSample::OnCreate(HWND hWnd)
 // OnDestroy
 //
 //--------------------------------------------------------------------------------------
-void SSSRSample::OnDestroy()
+void SssrSample::OnDestroy()
 {
     ImGUI_Shutdown();
 
@@ -153,7 +154,7 @@ void SSSRSample::OnDestroy()
 // OnEvent, forward Win32 events to ImGUI
 //
 //--------------------------------------------------------------------------------------
-bool SSSRSample::OnEvent(MSG msg)
+bool SssrSample::OnEvent(MSG msg)
 {
     if (ImGUI_WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam))
         return true;
@@ -166,14 +167,14 @@ bool SSSRSample::OnEvent(MSG msg)
 // SetFullScreen
 //
 //--------------------------------------------------------------------------------------
-void SSSRSample::SetFullScreen(bool fullscreen)
+void SssrSample::SetFullScreen(bool fullscreen)
 {
     m_Device.GPUFlush();
 
     m_Swapchain.SetFullScreen(fullscreen);
 }
 
-bool SSSRSample::LoadConfiguration()
+bool SssrSample::LoadConfiguration()
 {
     std::ifstream f("config.json");
     if (!f)
@@ -190,7 +191,7 @@ bool SSSRSample::LoadConfiguration()
     return true;
 }
 
-void SSSRSample::BuildUI()
+void SssrSample::BuildUI()
 {
     ImGuiStyle& style = ImGui::GetStyle();
     style.FrameBorderSize = 1.0f;
@@ -291,6 +292,7 @@ void SSSRSample::BuildUI()
         ImGui::SliderFloat("Emmisive", &m_State.emmisiveFactor, 1.0f, 1000.0f, NULL, 1.0f);
         ImGui::SliderFloat("Exposure", &m_State.exposure, 0.0f, 4.0f);
         ImGui::Checkbox("Show Light Frustums", &m_State.bDrawLightFrustum);
+        ImGui::Checkbox("Draw Bloom", &m_State.bDrawBloom);
     }
 
     if (ImGui::CollapsingHeader("Reflections", ImGuiTreeNodeFlags_DefaultOpen))
@@ -316,9 +318,9 @@ void SSSRSample::BuildUI()
         ImGui::RadioButton("EAW 1", &m_State.eawPassCount, 1); ImGui::SameLine();
         ImGui::RadioButton("EAW 3", &m_State.eawPassCount, 3);
 
-        ImGui::Value("Tile Classification Elapsed Time", m_State.tileClassificationTime);
-        ImGui::Value("Intersection Elapsed Time", m_State.intersectionTime);
-        ImGui::Value("Denoising Elapsed Time", m_State.denoisingTime);
+        ImGui::Value("Tile Classification Elapsed Time", 1000 * m_State.tileClassificationTime, "%.1f us");
+        ImGui::Value("Intersection Elapsed Time", 1000 * m_State.intersectionTime, "%.1f us");
+        ImGui::Value("Denoising Elapsed Time", 1000 * m_State.denoisingTime, "%.1f us");
     }
 
     if (ImGui::CollapsingHeader("Profiler"))
@@ -348,7 +350,7 @@ void SSSRSample::BuildUI()
     ImGui::End();
 }
 
-void SSSRSample::HandleInput()
+void SssrSample::HandleInput()
 {
     // If the mouse was not used by the GUI then it's for the camera
     //
@@ -396,9 +398,11 @@ void SSSRSample::HandleInput()
         }
         else
         {
-            //  Do WASD controls as well
-            //
-            m_State.camera.UpdateCameraWASD(m_Yaw, m_Pitch, io.KeysDown, io.DeltaTime);
+            // Use a camera from the GLTF
+            // 
+            m_pGltfLoader->GetCamera(m_CameraControlSelected - 2, &m_State.camera);
+            m_Yaw = m_State.camera.GetYaw();
+            m_Pitch = m_State.camera.GetPitch();
         }
     }
 }
@@ -408,7 +412,7 @@ void SSSRSample::HandleInput()
 // OnResize
 //
 //--------------------------------------------------------------------------------------
-void SSSRSample::OnResize(uint32_t width, uint32_t height)
+void SssrSample::OnResize(uint32_t width, uint32_t height)
 {
     if (m_Width != width || m_Height != height)
     {
@@ -449,7 +453,7 @@ void SSSRSample::OnResize(uint32_t width, uint32_t height)
 // OnRender, updates the state from the UI, animates, transforms and renders the scene
 //
 //--------------------------------------------------------------------------------------
-void SSSRSample::OnRender()
+void SssrSample::OnRender()
 {
     // Get timings
     //
@@ -530,5 +534,5 @@ int WINAPI WinMain(HINSTANCE hInstance,
     uint32_t Height = 1080; // 841;
 
     // create new DX sample
-    return RunFramework(hInstance, lpCmdLine, nCmdShow, Width, Height, new SSSRSample(Name));
+    return RunFramework(hInstance, lpCmdLine, nCmdShow, Width, Height, new SssrSample(Name));
 }

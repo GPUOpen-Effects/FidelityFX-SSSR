@@ -111,7 +111,7 @@ namespace
     }
 }
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the ReflectionViewD3D12 class.
@@ -397,26 +397,26 @@ namespace sssr
         \param context The context to be used.
         \param create_reflection_view_info The reflection view creation information.
     */
-    void ReflectionViewD3D12::Create(Context& context, SssrCreateReflectionViewInfo const& create_reflection_view_info)
+    void ReflectionViewD3D12::Create(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info)
     {
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12 != nullptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->sceneFormat != DXGI_FORMAT_UNKNOWN);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->depthBufferHierarchySRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->motionBufferSRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->normalBufferSRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->roughnessBufferSRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->normalHistoryBufferSRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->roughnessHistoryBufferSRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->environmentMapSRV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->pEnvironmentMapSamplerDesc);
-        SSSR_ASSERT(create_reflection_view_info.pCreateReflectionViewInfoD3D12->reflectionViewUAV.ptr);
-        SSSR_ASSERT(create_reflection_view_info.outputWidth && create_reflection_view_info.outputHeight);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo != nullptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->sceneFormat != DXGI_FORMAT_UNKNOWN);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->depthBufferHierarchySRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->motionBufferSRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->normalBufferSRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->roughnessBufferSRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->normalHistoryBufferSRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->roughnessHistoryBufferSRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->environmentMapSRV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->pEnvironmentMapSamplerDesc);
+        FFX_SSSR_ASSERT(create_reflection_view_info.pD3D12CreateReflectionViewInfo->reflectionViewUAV.ptr);
+        FFX_SSSR_ASSERT(create_reflection_view_info.outputWidth && create_reflection_view_info.outputHeight);
 
         // Populate the reflection view properties
         width_ = create_reflection_view_info.outputWidth;
         height_ = create_reflection_view_info.outputHeight;
         flags_ = create_reflection_view_info.flags;
-        scene_format_ = create_reflection_view_info.pCreateReflectionViewInfoD3D12->sceneFormat;
+        scene_format_ = create_reflection_view_info.pD3D12CreateReflectionViewInfo->sceneFormat;
 
         // Create reflection view resources
         CreateRootSignature(context, create_reflection_view_info);
@@ -467,7 +467,7 @@ namespace sssr
                 tile_list_desc, tile_counter_desc, ray_list_desc, ray_counter_desc, intersection_pass_indirect_args_desc, denoiser_pass_indirect_args_desc
             };
 
-            D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, SSSR_ARRAY_SIZE(resource_descs), resource_descs);
+            D3D12_RESOURCE_ALLOCATION_INFO allocation_info = device->GetResourceAllocationInfo(0, FFX_SSSR_ARRAY_SIZE(resource_descs), resource_descs);
             D3D12_HEAP_DESC heap_desc = {};
             heap_desc.Alignment = allocation_info.Alignment;
             heap_desc.SizeInBytes = allocation_info.SizeInBytes;
@@ -481,7 +481,7 @@ namespace sssr
             HRESULT hr = device->CreateHeap(&heap_desc, IID_PPV_ARGS(&resource_heap_));
             if (!SUCCEEDED(hr))
             {
-                throw reflection_error(context, SSSR_STATUS_OUT_OF_MEMORY, "Failed to create resource heap.");
+                throw reflection_error(context, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Failed to create resource heap.");
             }
 
             UINT64 heap_offset = 0;
@@ -495,7 +495,7 @@ namespace sssr
                 HRESULT hr = device->CreatePlacedResource(resource_heap_, heap_offset, desc, initial_state, nullptr, riidResource, ppvResource);
                 if (!SUCCEEDED(hr))
                 {
-                    throw reflection_error(context, SSSR_STATUS_OUT_OF_MEMORY, "Failed to create placed resource.");
+                    throw reflection_error(context, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Failed to create placed resource.");
                 }
 
                 heap_offset += desc->Width;
@@ -532,7 +532,7 @@ namespace sssr
             hr = device->CreateCommandSignature(&desc, nullptr, IID_PPV_ARGS(&indirect_dispatch_command_signature_));
             if (!SUCCEEDED(hr))
             {
-                throw reflection_error(context, SSSR_STATUS_INTERNAL_ERROR, "Failed to create command signature for indirect dispatch.");
+                throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create command signature for indirect dispatch.");
             }
         }
 
@@ -574,7 +574,7 @@ namespace sssr
 
                 if (!SUCCEEDED(hr))
                 {
-                    throw reflection_error(context, SSSR_STATUS_INTERNAL_ERROR, "Failed to create intermediate target.");
+                    throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create intermediate target.");
                 }
             };
 
@@ -623,21 +623,21 @@ namespace sssr
             ID3D12Device * device = context.GetContextD3D12()->GetDevice();
             UINT descriptor_size = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
-            D3D12_CPU_DESCRIPTOR_HANDLE scene_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->sceneSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE depth_hierarchy_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->depthBufferHierarchySRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE motion_buffer_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->motionBufferSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE normal_buffer_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->normalBufferSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE roughness_buffer_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->roughnessBufferSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE normal_history_buffer_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->normalHistoryBufferSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE roughness_history_buffer_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->roughnessHistoryBufferSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE environment_map_srv = create_reflection_view_info.pCreateReflectionViewInfoD3D12->environmentMapSRV;
-            D3D12_CPU_DESCRIPTOR_HANDLE output_buffer_uav = create_reflection_view_info.pCreateReflectionViewInfoD3D12->reflectionViewUAV;
+            D3D12_CPU_DESCRIPTOR_HANDLE scene_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->sceneSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE depth_hierarchy_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->depthBufferHierarchySRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE motion_buffer_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->motionBufferSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE normal_buffer_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->normalBufferSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE roughness_buffer_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->roughnessBufferSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE normal_history_buffer_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->normalHistoryBufferSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE roughness_history_buffer_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->roughnessHistoryBufferSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE environment_map_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->environmentMapSRV;
+            D3D12_CPU_DESCRIPTOR_HANDLE output_buffer_uav = create_reflection_view_info.pD3D12CreateReflectionViewInfo->reflectionViewUAV;
 
             D3D12_CPU_DESCRIPTOR_HANDLE normal_buffers[] = { normal_buffer_srv, normal_history_buffer_srv };
             D3D12_CPU_DESCRIPTOR_HANDLE roughness_buffers[] = { roughness_buffer_srv, roughness_history_buffer_srv };
 
-            bool ping_pong_normal = (create_reflection_view_info.flags & SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_NORMAL_BUFFERS) != 0;
-            bool ping_pong_roughness = (create_reflection_view_info.flags & SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_ROUGHNESS_BUFFERS) != 0;
+            bool ping_pong_normal = (create_reflection_view_info.flags & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_NORMAL_BUFFERS) != 0;
+            bool ping_pong_roughness = (create_reflection_view_info.flags & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_ROUGHNESS_BUFFERS) != 0;
 
             // Helper function to create a default shader resource view for a Texture2D
             auto SRV_Tex2D = [](DXGI_FORMAT format) {
@@ -746,10 +746,10 @@ namespace sssr
                     shader_resource_view_desc.Buffer.NumElements = static_cast<UINT>(sampler.scrambling_tile_buffer_->GetDesc().Width / sizeof(std::int32_t));
                     shader_resource_view_desc.Buffer.StructureByteStride = static_cast<UINT>(sizeof(std::int32_t));
                     device->CreateShaderResourceView(sampler.scrambling_tile_buffer_, &shader_resource_view_desc, table.GetCPUDescriptor(offset++)); // g_scrambling_tile_buffer
-                    device->CreateShaderResourceView(ray_list_, &SRV_Buffer(num_pixels), table.GetCPUDescriptor(offset++)); // g_ray_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_intersection_result
                     device->CreateUnorderedAccessView(ray_lengths_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
+                    device->CreateUnorderedAccessView(ray_list_, nullptr, &UAV_Buffer(num_pixels), table.GetCPUDescriptor(offset++)); // g_ray_list
                 }
 
                 // Spatial denoising pass
@@ -759,11 +759,11 @@ namespace sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
-                    device->CreateShaderResourceView(temporal_denoiser_result_[i], &SRV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_intersection_result
-                    device->CreateShaderResourceView(temporal_variance_, &SRV_Tex2D(DXGI_FORMAT_R8_UNORM), table.GetCPUDescriptor(offset++)); // g_has_ray
-                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_spatially_denoised_reflections
                     device->CreateUnorderedAccessView(ray_lengths_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
+                    device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_intersection_result
+                    device->CreateUnorderedAccessView(temporal_variance_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R8_UNORM), table.GetCPUDescriptor(offset++)); // g_has_ray
+                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
 
                 // Temporal denoising pass
@@ -776,12 +776,12 @@ namespace sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[1 - i] : roughness_history_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness_history
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), motion_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_motion_vectors
-                    device->CreateShaderResourceView(temporal_denoiser_result_[1 - i], &SRV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections_history
-                    device->CreateShaderResourceView(ray_lengths_, &SRV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
-                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_spatially_denoised_reflections
                     device->CreateUnorderedAccessView(temporal_variance_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R8_UNORM), table.GetCPUDescriptor(offset++)); // g_temporal_variance
+                    device->CreateUnorderedAccessView(temporal_denoiser_result_[1 - i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections_history
+                    device->CreateUnorderedAccessView(ray_lengths_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
+                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
 
                 // EAW denoising pass
@@ -791,9 +791,9 @@ namespace sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
-                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
+                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
 
                 // EAW Stride 2 denoising pass (the same as the EAW pass, but input and output buffers flipped)
@@ -803,9 +803,9 @@ namespace sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
-                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
+                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
 
                 // EAW Stride 4 denoising pass (the very same as the EAW pass)
@@ -815,15 +815,15 @@ namespace sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
-                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
+                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
             }
         }
 
         // Create timestamp querying resources if enabled
-        if ((create_reflection_view_info.flags & SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
+        if ((create_reflection_view_info.flags & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
         {
             auto const query_heap_size = kTimestampQuery_Count * context.GetFrameCountBeforeReuse() * sizeof(std::uint64_t);
 
@@ -834,7 +834,7 @@ namespace sssr
             if (!SUCCEEDED(context.GetContextD3D12()->GetDevice()->CreateQueryHeap(&query_heap_desc,
                 IID_PPV_ARGS(&timestamp_query_heap_))))
             {
-                throw reflection_error(context, SSSR_STATUS_OUT_OF_MEMORY, "Unable to create timestamp query heap");
+                throw reflection_error(context, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Unable to create timestamp query heap");
             }
 
             if (!context.GetContextD3D12()->AllocateReadbackBuffer(query_heap_size,
@@ -842,7 +842,7 @@ namespace sssr
                 D3D12_RESOURCE_STATE_COPY_DEST,
                 L"TimestampQueryBuffer"))
             {
-                throw reflection_error(context, SSSR_STATUS_OUT_OF_MEMORY, "Unable to allocate readback buffer");
+                throw reflection_error(context, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Unable to allocate readback buffer");
             }
 
             timestamp_queries_.resize(context.GetFrameCountBeforeReuse());
@@ -873,26 +873,26 @@ namespace sssr
         descriptor_heap_cbv_srv_uav_ = nullptr;
 
 
-#define SSSR_SAFE_RELEASE(x)\
+#define FFX_SSSR_SAFE_RELEASE(x)\
         if(x) { x->Release(); }\
         x = nullptr;
 
-        SSSR_SAFE_RELEASE(indirect_dispatch_command_signature_);
-        SSSR_SAFE_RELEASE(timestamp_query_heap_);
-        SSSR_SAFE_RELEASE(timestamp_query_buffer_);
-        SSSR_SAFE_RELEASE(temporal_denoiser_result_[0]);
-        SSSR_SAFE_RELEASE(temporal_denoiser_result_[1]);
-        SSSR_SAFE_RELEASE(ray_lengths_);
-        SSSR_SAFE_RELEASE(temporal_variance_);
-        SSSR_SAFE_RELEASE(tile_list_);
-        SSSR_SAFE_RELEASE(tile_counter_);
-        SSSR_SAFE_RELEASE(ray_list_);
-        SSSR_SAFE_RELEASE(ray_counter_);
-        SSSR_SAFE_RELEASE(intersection_pass_indirect_args_);
-        SSSR_SAFE_RELEASE(denoiser_pass_indirect_args_);
-        SSSR_SAFE_RELEASE(resource_heap_);
+        FFX_SSSR_SAFE_RELEASE(indirect_dispatch_command_signature_);
+        FFX_SSSR_SAFE_RELEASE(timestamp_query_heap_);
+        FFX_SSSR_SAFE_RELEASE(timestamp_query_buffer_);
+        FFX_SSSR_SAFE_RELEASE(temporal_denoiser_result_[0]);
+        FFX_SSSR_SAFE_RELEASE(temporal_denoiser_result_[1]);
+        FFX_SSSR_SAFE_RELEASE(ray_lengths_);
+        FFX_SSSR_SAFE_RELEASE(temporal_variance_);
+        FFX_SSSR_SAFE_RELEASE(tile_list_);
+        FFX_SSSR_SAFE_RELEASE(tile_counter_);
+        FFX_SSSR_SAFE_RELEASE(ray_list_);
+        FFX_SSSR_SAFE_RELEASE(ray_counter_);
+        FFX_SSSR_SAFE_RELEASE(intersection_pass_indirect_args_);
+        FFX_SSSR_SAFE_RELEASE(denoiser_pass_indirect_args_);
+        FFX_SSSR_SAFE_RELEASE(resource_heap_);
 
-#undef SSSR_SAFE_RELEASE
+#undef FFX_SSSR_SAFE_RELEASE
 
         timestamp_queries_.resize(0u);
     }
@@ -902,7 +902,7 @@ namespace sssr
 
         \param context The context to be used.
     */
-    void ReflectionViewD3D12::CreateRootSignature(Context& context, SssrCreateReflectionViewInfo const& create_reflection_view_info)
+    void ReflectionViewD3D12::CreateRootSignature(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info)
     {
         auto CreateRootSignature = [&context, &create_reflection_view_info](
             ShaderPass& pass
@@ -916,7 +916,7 @@ namespace sssr
                 InitAsConstantBufferView(0)
             };
 
-            D3D12_STATIC_SAMPLER_DESC environment_sampler = *create_reflection_view_info.pCreateReflectionViewInfoD3D12->pEnvironmentMapSamplerDesc;
+            D3D12_STATIC_SAMPLER_DESC environment_sampler = *create_reflection_view_info.pD3D12CreateReflectionViewInfo->pEnvironmentMapSamplerDesc;
             environment_sampler.RegisterSpace = 0;
             environment_sampler.ShaderRegister = 1;
             environment_sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
@@ -924,9 +924,9 @@ namespace sssr
             D3D12_STATIC_SAMPLER_DESC sampler_descs[] = { InitLinearSampler(0), environment_sampler }; // g_linear_sampler
 
             D3D12_ROOT_SIGNATURE_DESC rs_desc = {};
-            rs_desc.NumParameters = SSSR_ARRAY_SIZE(root);
+            rs_desc.NumParameters = FFX_SSSR_ARRAY_SIZE(root);
             rs_desc.pParameters = root;
-            rs_desc.NumStaticSamplers = SSSR_ARRAY_SIZE(sampler_descs);
+            rs_desc.NumStaticSamplers = FFX_SSSR_ARRAY_SIZE(sampler_descs);
             rs_desc.pStaticSamplers = sampler_descs;
 
             HRESULT hr;
@@ -938,11 +938,11 @@ namespace sssr
                 {
                     std::string const error_message(static_cast<char const*>(rsError->GetBufferPointer()));
                     rsError->Release();
-                    throw reflection_error(context, SSSR_STATUS_INTERNAL_ERROR, "Unable to serialize root signature:\r\n> %s", error_message.c_str());
+                    throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to serialize root signature:\r\n> %s", error_message.c_str());
                 }
                 else
                 {
-                    throw reflection_error(context, SSSR_STATUS_INTERNAL_ERROR, "Unable to serialize root signature");
+                    throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to serialize root signature");
                 }
             }
 
@@ -950,7 +950,7 @@ namespace sssr
             rs->Release();
             if (FAILED(hr))
             {
-                throw reflection_error(context, SSSR_STATUS_INTERNAL_ERROR, "Failed to create root signature.");
+                throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create root signature.");
             }
 
             pass.root_signature_->SetName(name);
@@ -970,8 +970,8 @@ namespace sssr
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 7), // g_temporal_variance
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 8), // g_denoised_reflections
             };
-            CreateRootSignature(tile_classification_pass_, L"SSSR Tile Classification Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_tile_classification_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(tile_classification_pass_, L"SSSR Tile Classification Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_tile_classification_ = FFX_SSSR_ARRAY_SIZE(ranges);
         }
 
         // Assemble the shader pass that prepares the indirect arguments
@@ -982,8 +982,8 @@ namespace sssr
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_intersect_args
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_denoiser_args
             };
-            CreateRootSignature(indirect_args_pass_, L"SSSR Indirect Arguments Pass Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_indirect_args_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(indirect_args_pass_, L"SSSR Indirect Arguments Pass Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_indirect_args_ = FFX_SSSR_ARRAY_SIZE(ranges);
         }
 
         // Assemble the shader pass for intersecting reflection rays with the depth buffer
@@ -997,13 +997,13 @@ namespace sssr
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5), // g_sobol_buffer
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 6), // g_ranking_tile_buffer
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 7), // g_scrambling_tile_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8), // g_ray_list
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_intersection_result
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_ray_lengths
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_denoised_reflections
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_ray_list
             };
-            CreateRootSignature(intersection_pass_, L"SSSR Depth Buffer Intersection Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_intersection_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(intersection_pass_, L"SSSR Depth Buffer Intersection Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_intersection_ = FFX_SSSR_ARRAY_SIZE(ranges);
         }
 
         // Assemble the shader pass for spatial resolve
@@ -1012,14 +1012,14 @@ namespace sssr
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_depth_buffer
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1), // g_normal
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2), // g_roughness
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3), // g_intersection_result
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4), // g_has_ray
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5), // g_tile_list
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_spatially_denoised_reflections
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_ray_lengths
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_intersection_result
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_has_ray
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4), // g_tile_list
             };
-            CreateRootSignature(spatial_denoising_pass_, L"SSSR Spatial Resolve Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_spatial_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(spatial_denoising_pass_, L"SSSR Spatial Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_spatial_ = FFX_SSSR_ARRAY_SIZE(ranges);
         }
 
         // Assemble the shader pass for temporal resolve
@@ -1031,15 +1031,15 @@ namespace sssr
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3), // g_roughness_history
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4), // g_depth_buffer
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5), // g_motion_vectors
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 6), // g_temporally_denoised_reflections_history
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 7), // g_ray_lengths
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 8), // g_tile_list
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_temporally_denoised_reflections
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_spatially_denoised_reflections
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_temporal_variance
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_temporally_denoised_reflections_history
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4), // g_ray_lengths
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 5), // g_tile_list
             };
-            CreateRootSignature(temporal_denoising_pass_, L"SSSR Temporal Resolve Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_temporal_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(temporal_denoising_pass_, L"SSSR Temporal Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_temporal_ = FFX_SSSR_ARRAY_SIZE(ranges);
         }
 
         // Assemble the shader pass for EAW resolve
@@ -1048,18 +1048,18 @@ namespace sssr
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_normal
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1), // g_roughness
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2), // g_depth_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3), // g_tile_list
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_temporally_denoised_reflections
                 InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_denoised_reflections
+                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_tile_list
             };
-            CreateRootSignature(eaw_denoising_pass_, L"SSSR EAW Resolve Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_eaw_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(eaw_denoising_pass_, L"SSSR EAW Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_eaw_ = FFX_SSSR_ARRAY_SIZE(ranges);
 
-            CreateRootSignature(eaw_stride_2_denoising_pass_, L"SSSR EAW Stride 2 Resolve Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_eaw_stride_2_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(eaw_stride_2_denoising_pass_, L"SSSR EAW Stride 2 Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_eaw_stride_2_ = FFX_SSSR_ARRAY_SIZE(ranges);
 
-            CreateRootSignature(eaw_stride_4_denoising_pass_, L"SSSR EAW Stride 4 Resolve Root Signature", SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_eaw_stride_4_ = SSSR_ARRAY_SIZE(ranges);
+            CreateRootSignature(eaw_stride_4_denoising_pass_, L"SSSR EAW Stride 4 Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
+            descriptor_count_eaw_stride_4_ = FFX_SSSR_ARRAY_SIZE(ranges);
 
         }
     }
@@ -1072,7 +1072,7 @@ namespace sssr
     void ReflectionViewD3D12::CreatePipelineState(Context& context)
     {
         auto Compile = [&context](ShaderPass& pass, ContextD3D12::Shader shader, const LPCWSTR name) {
-            SSSR_ASSERT(pass.root_signature_ != nullptr);
+            FFX_SSSR_ASSERT(pass.root_signature_ != nullptr);
 
             // Create the pipeline state object
             D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_state_desc = {};
@@ -1083,7 +1083,7 @@ namespace sssr
                 IID_PPV_ARGS(&pass.pipeline_state_));
             if (!SUCCEEDED(hr))
             {
-                throw reflection_error(context, SSSR_STATUS_INTERNAL_ERROR, "Failed to create compute pipeline state");
+                throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create compute pipeline state");
             }
 
             pass.pipeline_state_->SetName(name);
@@ -1106,9 +1106,9 @@ namespace sssr
     */
     void ReflectionViewD3D12::CreateDescriptorHeaps(Context& context)
     {
-        SSSR_ASSERT(!descriptor_heap_cbv_srv_uav_);
+        FFX_SSSR_ASSERT(!descriptor_heap_cbv_srv_uav_);
         descriptor_heap_cbv_srv_uav_ = new DescriptorHeapD3D12(context);
-        SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ != nullptr);
+        FFX_SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ != nullptr);
 
         std::uint32_t descriptor_count = descriptor_count_tile_classification_ + descriptor_count_indirect_args_ + descriptor_count_intersection_ + descriptor_count_spatial_ + descriptor_count_temporal_ + descriptor_count_eaw_ + descriptor_count_eaw_stride_2_ + descriptor_count_eaw_stride_4_;
         descriptor_heap_cbv_srv_uav_->Create(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 * descriptor_count, 0u);
@@ -1144,25 +1144,25 @@ namespace sssr
         \param reflection_view The reflection view to be resolved.
         \param resolve_reflection_view_info The reflection view resolve information.
     */
-    void ReflectionViewD3D12::Resolve(Context& context, ReflectionView const& reflection_view, SssrResolveReflectionViewInfo const& resolve_reflection_view_info)
+    void ReflectionViewD3D12::Resolve(Context& context, ReflectionView const& reflection_view, FfxSssrResolveReflectionViewInfo const& resolve_reflection_view_info)
     {
         // Get hold of the command list for recording
-        SSSR_ASSERT(resolve_reflection_view_info.pCommandEncodeInfoD3D12);
-        auto const command_list = ContextD3D12::GetCommandList(context, resolve_reflection_view_info.pCommandEncodeInfoD3D12->pCommandList);
-        SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ && command_list);
-        SSSR_ASSERT(tile_classification_pass_);
-        SSSR_ASSERT(indirect_args_pass_);
-        SSSR_ASSERT(intersection_pass_);
-        SSSR_ASSERT(spatial_denoising_pass_);
-        SSSR_ASSERT(temporal_denoising_pass_);
-        SSSR_ASSERT(eaw_denoising_pass_);
-        SSSR_ASSERT(eaw_stride_2_denoising_pass_);
-        SSSR_ASSERT(eaw_stride_4_denoising_pass_);
-        SSSR_ASSERT(resolve_reflection_view_info.samplesPerQuad == SSSR_RAY_SAMPLES_PER_QUAD_1 || resolve_reflection_view_info.samplesPerQuad == SSSR_RAY_SAMPLES_PER_QUAD_2 || resolve_reflection_view_info.samplesPerQuad == SSSR_RAY_SAMPLES_PER_QUAD_4);
-        SSSR_ASSERT(resolve_reflection_view_info.eawPassCount == SSSR_EAW_PASS_COUNT_1 || resolve_reflection_view_info.eawPassCount == SSSR_EAW_PASS_COUNT_3);
+        FFX_SSSR_ASSERT(resolve_reflection_view_info.pD3D12CommandEncodeInfo);
+        auto const command_list = ContextD3D12::GetCommandList(context, resolve_reflection_view_info.pD3D12CommandEncodeInfo->pCommandList);
+        FFX_SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ && command_list);
+        FFX_SSSR_ASSERT(tile_classification_pass_);
+        FFX_SSSR_ASSERT(indirect_args_pass_);
+        FFX_SSSR_ASSERT(intersection_pass_);
+        FFX_SSSR_ASSERT(spatial_denoising_pass_);
+        FFX_SSSR_ASSERT(temporal_denoising_pass_);
+        FFX_SSSR_ASSERT(eaw_denoising_pass_);
+        FFX_SSSR_ASSERT(eaw_stride_2_denoising_pass_);
+        FFX_SSSR_ASSERT(eaw_stride_4_denoising_pass_);
+        FFX_SSSR_ASSERT(resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_1 || resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_2 || resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_4);
+        FFX_SSSR_ASSERT(resolve_reflection_view_info.eawPassCount == FFX_SSSR_EAW_PASS_COUNT_1 || resolve_reflection_view_info.eawPassCount == FFX_SSSR_EAW_PASS_COUNT_3);
 
         // Query timestamp value prior to resolving the reflection view
-        if ((flags_ & SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
+        if ((flags_ & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
         {
             auto& timestamp_queries = timestamp_queries_[timestamp_queries_index_];
 
@@ -1242,7 +1242,7 @@ namespace sssr
         PassData* pass_data;
         if (!upload_buffer.AllocateBuffer(sizeof(PassData), pass_data))
         {
-            throw reflection_error(context, SSSR_STATUS_OUT_OF_MEMORY, "Failed to allocate %u bytes of upload memory, consider increasing uploadBufferSize", sizeof(PassData));
+            throw reflection_error(context, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Failed to allocate %u bytes of upload memory, consider increasing uploadBufferSize", sizeof(PassData));
         }
 
         // Fill constant buffer
@@ -1261,10 +1261,10 @@ namespace sssr
         pass_data->most_detailed_mip_ = resolve_reflection_view_info.mostDetailedDepthHierarchyMipLevel;
         pass_data->temporal_stability_factor_ = temporal_stability_scale * temporal_stability_scale;
         pass_data->depth_buffer_thickness_ = resolve_reflection_view_info.depthBufferThickness;
-        pass_data->samples_per_quad_ = resolve_reflection_view_info.samplesPerQuad == SSSR_RAY_SAMPLES_PER_QUAD_4 ? 4 : (resolve_reflection_view_info.samplesPerQuad == SSSR_RAY_SAMPLES_PER_QUAD_2 ? 2 : 1);
-        pass_data->temporal_variance_guided_tracing_enabled_ = resolve_reflection_view_info.flags & SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING ? 1 : 0;
+        pass_data->samples_per_quad_ = resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_4 ? 4 : (resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_2 ? 2 : 1);
+        pass_data->temporal_variance_guided_tracing_enabled_ = resolve_reflection_view_info.flags & FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING ? 1 : 0;
         pass_data->roughness_threshold_ = resolve_reflection_view_info.roughnessThreshold;
-        pass_data->skip_denoiser_ = resolve_reflection_view_info.flags & SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE ? 0 : 1;
+        pass_data->skip_denoiser_ = resolve_reflection_view_info.flags & FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE ? 0 : 1;
         prev_view_projection_ = view_projection;
         
         std::uint32_t current_frame = context.GetFrameIndex() & 1u;
@@ -1312,7 +1312,7 @@ namespace sssr
             Transition(intersection_pass_indirect_args_, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
             Transition(denoiser_pass_indirect_args_, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
         };
-        command_list->ResourceBarrier(SSSR_ARRAY_SIZE(classification_results_barriers), classification_results_barriers);
+        command_list->ResourceBarrier(FFX_SSSR_ARRAY_SIZE(classification_results_barriers), classification_results_barriers);
 
         // Indirect Arguments pass
         {
@@ -1324,11 +1324,11 @@ namespace sssr
         }
 
         // Query the amount of time spent in the intersection pass
-        if ((flags_ & SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
+        if ((flags_ & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
         {
             auto& timestamp_queries = timestamp_queries_[timestamp_queries_index_];
 
-            SSSR_ASSERT(timestamp_queries.size() == 1ull && timestamp_queries[0] == kTimestampQuery_Init);
+            FFX_SSSR_ASSERT(timestamp_queries.size() == 1ull && timestamp_queries[0] == kTimestampQuery_Init);
 
             command_list->EndQuery(timestamp_query_heap_,
                 D3D12_QUERY_TYPE_TIMESTAMP,
@@ -1344,7 +1344,7 @@ namespace sssr
             Transition(intersection_pass_indirect_args_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT),
             Transition(denoiser_pass_indirect_args_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT)
         };
-        command_list->ResourceBarrier(SSSR_ARRAY_SIZE(indirect_arguments_barriers), indirect_arguments_barriers);
+        command_list->ResourceBarrier(FFX_SSSR_ARRAY_SIZE(indirect_arguments_barriers), indirect_arguments_barriers);
 
         // Intersection pass
         {
@@ -1356,11 +1356,11 @@ namespace sssr
         }
 
         // Query the amount of time spent in the intersection pass
-        if ((flags_ & SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
+        if ((flags_ & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
         {
             auto& timestamp_queries = timestamp_queries_[timestamp_queries_index_];
 
-            SSSR_ASSERT(timestamp_queries.size() == 2ull && timestamp_queries[1] == kTimestampQuery_TileClassification);
+            FFX_SSSR_ASSERT(timestamp_queries.size() == 2ull && timestamp_queries[1] == kTimestampQuery_TileClassification);
 
             command_list->EndQuery(timestamp_query_heap_,
                                    D3D12_QUERY_TYPE_TIMESTAMP,
@@ -1369,7 +1369,7 @@ namespace sssr
             timestamp_queries.push_back(kTimestampQuery_Intersection);
         }
 
-        if (resolve_reflection_view_info.flags & SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE)
+        if (resolve_reflection_view_info.flags & FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE)
         {
             // Ensure that the intersection pass finished
             command_list->ResourceBarrier(1, &UAVBarrier(temporal_denoiser_result_[current_frame]));
@@ -1407,7 +1407,7 @@ namespace sssr
                 command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
             }
 
-            if (resolve_reflection_view_info.eawPassCount == SSSR_EAW_PASS_COUNT_3)
+            if (resolve_reflection_view_info.eawPassCount == FFX_SSSR_EAW_PASS_COUNT_3)
             {
                 // Ensure that the prior EAW pass has finished
                 command_list->ResourceBarrier(1, &UAVBarrier(nullptr));
@@ -1430,11 +1430,11 @@ namespace sssr
             }
 
             // Query the amount of time spent in the denoiser passes
-            if ((flags_ & SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
+            if ((flags_ & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
             {
                 auto& timestamp_queries = timestamp_queries_[timestamp_queries_index_];
 
-                SSSR_ASSERT(timestamp_queries.size() == 3ull && timestamp_queries[2] == kTimestampQuery_Intersection);
+                FFX_SSSR_ASSERT(timestamp_queries.size() == 3ull && timestamp_queries[2] == kTimestampQuery_Intersection);
 
                 command_list->EndQuery(timestamp_query_heap_,
                     D3D12_QUERY_TYPE_TIMESTAMP,
@@ -1445,7 +1445,7 @@ namespace sssr
         }
 
         // Resolve the timestamp query data
-        if ((flags_ & SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
+        if ((flags_ & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
         {
             auto const start_index = timestamp_queries_index_ * kTimestampQuery_Count;
 

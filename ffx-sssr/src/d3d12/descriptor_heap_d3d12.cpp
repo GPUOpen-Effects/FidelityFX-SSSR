@@ -24,7 +24,7 @@ THE SOFTWARE.
 #include "reflection_error.h"
 #include "context_d3d12.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the DescriptorHeapD3D12 class.
@@ -78,7 +78,7 @@ namespace sssr
         result = context_.GetContextD3D12()->GetDevice()->CreateDescriptorHeap(&descriptor_heap_desc, IID_PPV_ARGS(&descriptor_heap));
         if (!SUCCEEDED(result))
         {
-            throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Unable to create descriptor heap");
+            throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to create descriptor heap");
         }
         descriptor_heap->SetName(L"SSSR Descriptor Heap");
 

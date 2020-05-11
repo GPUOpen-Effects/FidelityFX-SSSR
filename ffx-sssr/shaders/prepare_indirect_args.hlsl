@@ -20,16 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_INDIRECT_ARGS
-#define SSR_INDIRECT_ARGS
+#ifndef FFX_SSSR_INDIRECT_ARGS
+#define FFX_SSSR_INDIRECT_ARGS
 
-// In/Out:
-RWBuffer<uint> g_tile_counter : register(u0); // scene rendered with lighting and shadows
-RWBuffer<uint> g_ray_counter : register(u1);
-
-// Out:
-RWBuffer<uint> g_intersect_args : register(u2);
-RWBuffer<uint> g_denoiser_args : register(u3);
+RWBuffer<uint> g_tile_counter       : register(u0);
+RWBuffer<uint> g_ray_counter        : register(u1);
+RWBuffer<uint> g_intersect_args     : register(u2);
+RWBuffer<uint> g_denoiser_args      : register(u3);
 
 [numthreads(1, 1, 1)]
 void main()
@@ -49,4 +46,4 @@ void main()
     g_denoiser_args[2] = 1;
 }
 
-#endif // SSR_INDIRECT_ARGS
+#endif // FFX_SSSR_INDIRECT_ARGS

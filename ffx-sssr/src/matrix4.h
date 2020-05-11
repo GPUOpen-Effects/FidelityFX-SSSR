@@ -23,7 +23,7 @@ THE SOFTWARE.
 
 #include "float3.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The tmatrix4 class represents a generic 4x4 matrix.

@@ -30,7 +30,7 @@ THE SOFTWARE.
 #include "reflection_error.h"
 #include "resources.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class ContextD3D12;
 
@@ -44,10 +44,10 @@ namespace sssr
     */
     class Context
     {
-        SSSR_NON_COPYABLE(Context);
+        FFX_SSSR_NON_COPYABLE(Context);
 
     public:
-        Context(SssrCreateContextInfo const& create_context_info);
+        Context(FfxSssrCreateContextInfo const& create_context_info);
         ~Context();
 
         inline std::uint32_t& GetFrameIndex();
@@ -70,15 +70,15 @@ namespace sssr
         inline ContextD3D12* GetContextD3D12();
         inline ContextD3D12 const* GetContextD3D12() const;
 
-        void CreateReflectionView(std::uint64_t reflection_view_id, SssrCreateReflectionViewInfo const& create_reflection_view_info);
-        void ResolveReflectionView(std::uint64_t reflection_view_id, SssrResolveReflectionViewInfo const& resolve_reflection_view_info);
+        void CreateReflectionView(std::uint64_t reflection_view_id, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
+        void ResolveReflectionView(std::uint64_t reflection_view_id, FfxSssrResolveReflectionViewInfo const& resolve_reflection_view_info);
 
         inline char const* GetAPICall() const;
         inline void SetAPICall(char const* api_call);
 
-        inline static char const* GetErrorName(SssrStatus error);
-        inline void Error(SssrStatus error, char const* format, ...);
-        inline void Error(SssrStatus error, char const* format, va_list args);
+        inline static char const* GetErrorName(FfxSssrStatus error);
+        inline void Error(FfxSssrStatus error, char const* format, ...);
+        inline void Error(FfxSssrStatus error, char const* format, va_list args);
         inline void AdvanceToNextFrame();
 
         void GetReflectionViewTileClassificationElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const;
@@ -103,16 +103,16 @@ namespace sssr
         // The number of frames before memory can be re-used.
         std::uint32_t const frame_count_before_reuse_;
         // The logging function to be used to print out messages.
-        PFN_sssrLoggingFunction logging_function_;
+        PFN_ffxSssrLoggingFunction logging_function_;
         // The user data to be supplied to the logging function.
         void* logging_function_user_data_;
         // The API call that is currently being executed.
         char const* api_call_;
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
         // The Direct3D12 context object.
         std::unique_ptr<ContextD3D12> context_d3d12_;
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
 
         // The list of reflection view identifiers.
         IdDispenser reflection_view_id_dispenser_;

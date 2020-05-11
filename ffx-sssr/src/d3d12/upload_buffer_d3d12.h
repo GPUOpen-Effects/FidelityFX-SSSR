@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 #include "memory.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class Context;
     class ContextD3D12;
@@ -35,7 +35,7 @@ namespace sssr
     */
     class UploadBufferD3D12
     {
-        SSSR_NON_COPYABLE(UploadBufferD3D12);
+        FFX_SSSR_NON_COPYABLE(UploadBufferD3D12);
 
     public:
         UploadBufferD3D12(ContextD3D12& context, std::size_t buffer_size);

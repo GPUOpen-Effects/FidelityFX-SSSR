@@ -53,6 +53,7 @@ public:
         int   skyDomeType;
         bool  bDrawBoundingBoxes;
         bool  bDrawLightFrustum;
+        bool  bDrawBloom;
         bool  bDrawScreenSpaceReflections;
 
         float targetFrametime;
@@ -114,8 +115,6 @@ private:
 
     uint32_t                        m_Width;
     uint32_t                        m_Height;
-
-    uint32_t                        m_CurrentFrame;
 
     D3D12_VIEWPORT                  m_Viewport;
     D3D12_RECT                      m_Scissor;
@@ -190,9 +189,9 @@ private:
 
     std::vector<TimeStamp>          m_TimeStamps;
 
-    // SSR Effect
-    SssrContext                     m_SssrContext;
-    SssrReflectionView              m_SssrReflectionView;
+    // FFX SSSR Effect
+    FfxSssrContext                     m_SssrContext;
+    FfxSssrReflectionView              m_SssrReflectionView;
     bool                            m_SssrCreatedReflectionView = false;
     CBV_SRV_UAV                     m_SssrSceneSRV;
     CBV_SRV_UAV                     m_SssrDepthBufferHierarchySRV;

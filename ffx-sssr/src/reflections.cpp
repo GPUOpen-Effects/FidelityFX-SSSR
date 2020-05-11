@@ -26,7 +26,7 @@ THE SOFTWARE.
 /**
     A define for starting a try block.
 */
-#define SSSR_TRY                              \
+#define FFX_SSSR_TRY                              \
     try
 
 /**
@@ -34,8 +34,8 @@ THE SOFTWARE.
 
     \param ERROR The error callback.
 */
-#define SSSR_CATCH(ERROR)                     \
-    catch (sssr::reflection_error const& error) \
+#define FFX_SSSR_CATCH(ERROR)                     \
+    catch (ffx_sssr::reflection_error const& error) \
     {                                       \
         ERROR();                            \
         return error.error_;                \
@@ -43,12 +43,12 @@ THE SOFTWARE.
     catch (std::bad_alloc const&)           \
     {                                       \
         ERROR();                            \
-        return SSSR_STATUS_OUT_OF_MEMORY;     \
+        return FFX_SSSR_STATUS_OUT_OF_MEMORY;     \
     }                                       \
     catch (...)                             \
     {                                       \
         ERROR();                            \
-        return SSSR_STATUS_INTERNAL_ERROR;    \
+        return FFX_SSSR_STATUS_INTERNAL_ERROR;    \
     }
 
 namespace
@@ -58,7 +58,7 @@ namespace
     */
     class APICall
     {
-        SSSR_NON_COPYABLE(APICall);
+        FFX_SSSR_NON_COPYABLE(APICall);
 
     public:
         /**
@@ -67,7 +67,7 @@ namespace
             \param context The context to be used.
             \param api_call The API call that was requested.
         */
-        inline APICall(sssr::Context& context, char const* api_call)
+        inline APICall(ffx_sssr::Context& context, char const* api_call)
             : context_(context)
         {
             context_.SetAPICall(api_call);
@@ -83,7 +83,7 @@ namespace
 
     protected:
         // The context being in use.
-        sssr::Context& context_;
+        ffx_sssr::Context& context_;
     };
 
     /**
@@ -92,84 +92,84 @@ namespace
         \param CTX The context being used.
         \param API_CALL The API call that was requested.
     */
-    #define SSSR_API_CALL(CTX, API_CALL)  \
+    #define FFX_SSSR_API_CALL(CTX, API_CALL)  \
         APICall const _api_call_##API_CALL(*CTX, #API_CALL)
 }
 
-SssrStatus sssrCreateContext(const SssrCreateContextInfo* pCreateContextInfo, SssrContext* outContext)
+FfxSssrStatus ffxSssrCreateContext(const FfxSssrCreateContextInfo* pCreateContextInfo, FfxSssrContext* outContext)
 {
     if (!pCreateContextInfo || !outContext)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
-    if (pCreateContextInfo->apiVersion != SSSR_API_VERSION)
+    if (pCreateContextInfo->apiVersion != FFX_SSSR_API_VERSION)
     {
-        return SSSR_STATUS_INCOMPATIBLE_API;
+        return FFX_SSSR_STATUS_INCOMPATIBLE_API;
     }
 
-    sssr::Context* context;
+    ffx_sssr::Context* context;
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
-        context = new sssr::Context(*pCreateContextInfo);
+        context = new ffx_sssr::Context(*pCreateContextInfo);
 
         if (!context)
         {
-            return SSSR_STATUS_OUT_OF_MEMORY;
+            return FFX_SSSR_STATUS_OUT_OF_MEMORY;
         }
 
-        *outContext = reinterpret_cast<SssrContext>(context);
+        *outContext = reinterpret_cast<FfxSssrContext>(context);
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
     context->SetAPICall(nullptr);
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrDestroyContext(SssrContext context)
+FfxSssrStatus ffxSssrDestroyContext(FfxSssrContext context)
 {
     if (!context)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx)
     {
-        return SSSR_STATUS_OK;    // nothing to destroy
+        return FFX_SSSR_STATUS_OK;    // nothing to destroy
     }
 
-    ctx->SetAPICall("sssrDestroyContext");
+    ctx->SetAPICall("ffxSssrDestroyContext");
 
     delete ctx;
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrCreateReflectionView(SssrContext context, const SssrCreateReflectionViewInfo* pCreateReflectionViewInfo, SssrReflectionView* outReflectionView)
+FfxSssrStatus ffxSssrCreateReflectionView(FfxSssrContext context, const FfxSssrCreateReflectionViewInfo* pCreateReflectionViewInfo, FfxSssrReflectionView* outReflectionView)
 {
     std::uint64_t reflection_view_id = 0ull;
 
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !pCreateReflectionViewInfo || !outReflectionView)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
-    SSSR_API_CALL(ctx, sssrCreateReflectionView);
+    FFX_SSSR_API_CALL(ctx, ffxSssrCreateReflectionView);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
-        ctx->CreateObject<sssr::kResourceType_ReflectionView>(reflection_view_id);
+        ctx->CreateObject<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id);
         ctx->CreateReflectionView(reflection_view_id, *pCreateReflectionViewInfo);
 
-        *outReflectionView = reinterpret_cast<SssrReflectionView>(reflection_view_id);
+        *outReflectionView = reinterpret_cast<FfxSssrReflectionView>(reflection_view_id);
     }
-    SSSR_CATCH([&]()
+    FFX_SSSR_CATCH([&]()
     {
         if (reflection_view_id)
         {
@@ -177,191 +177,191 @@ SssrStatus sssrCreateReflectionView(SssrContext context, const SssrCreateReflect
         }
     })
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrDestroyReflectionView(SssrContext context, SssrReflectionView reflectionView)
+FfxSssrStatus ffxSssrDestroyReflectionView(FfxSssrContext context, FfxSssrReflectionView reflectionView)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     if (!reflectionView)
     {
-        return SSSR_STATUS_OK;    // nothing to delete
+        return FFX_SSSR_STATUS_OK;    // nothing to delete
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrDestroyReflectionView);
+    FFX_SSSR_API_CALL(ctx, ffxSssrDestroyReflectionView);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
         ctx->DestroyObject(reflection_view_id);
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrEncodeResolveReflectionView(SssrContext context, SssrReflectionView reflectionView, const SssrResolveReflectionViewInfo* pResolveReflectionViewInfo)
+FfxSssrStatus ffxSssrEncodeResolveReflectionView(FfxSssrContext context, FfxSssrReflectionView reflectionView, const FfxSssrResolveReflectionViewInfo* pResolveReflectionViewInfo)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !pResolveReflectionViewInfo)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrEncodeResolveReflectionView);
+    FFX_SSSR_API_CALL(ctx, ffxSssrEncodeResolveReflectionView);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
         ctx->ResolveReflectionView(reflection_view_id, *pResolveReflectionViewInfo);
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrAdvanceToNextFrame(SssrContext context)
+FfxSssrStatus ffxSssrAdvanceToNextFrame(FfxSssrContext context)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
-    SSSR_API_CALL(ctx, sssrAdvanceToNextFrame);
+    FFX_SSSR_API_CALL(ctx, ffxSssrAdvanceToNextFrame);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
         ctx->AdvanceToNextFrame();
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
 
-SssrStatus sssrReflectionViewGetTileClassificationElapsedTime(SssrContext context, SssrReflectionView reflectionView, uint64_t* outTileClassificationElapsedTime)
+FfxSssrStatus ffxSssrReflectionViewGetTileClassificationElapsedTime(FfxSssrContext context, FfxSssrReflectionView reflectionView, uint64_t* outTileClassificationElapsedTime)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !outTileClassificationElapsedTime)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrReflectionViewGetTileClassificationElapsedTime);
+    FFX_SSSR_API_CALL(ctx, ffxSssrReflectionViewGetTileClassificationElapsedTime);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
         ctx->GetReflectionViewTileClassificationElapsedTime(reflection_view_id, *outTileClassificationElapsedTime);
     }
-        SSSR_CATCH([]() {})
+        FFX_SSSR_CATCH([]() {})
 
-        return SSSR_STATUS_OK;
+        return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrReflectionViewGetIntersectionElapsedTime(SssrContext context, SssrReflectionView reflectionView, uint64_t* outIntersectionElapsedTime)
+FfxSssrStatus ffxSssrReflectionViewGetIntersectionElapsedTime(FfxSssrContext context, FfxSssrReflectionView reflectionView, uint64_t* outIntersectionElapsedTime)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !outIntersectionElapsedTime)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrReflectionViewGetIntersectionElapsedTime);
+    FFX_SSSR_API_CALL(ctx, ffxSssrReflectionViewGetIntersectionElapsedTime);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
         ctx->GetReflectionViewIntersectionElapsedTime(reflection_view_id, *outIntersectionElapsedTime);
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrReflectionViewGetDenoisingElapsedTime(SssrContext context, SssrReflectionView reflectionView, uint64_t* outDenoisingElapsedTime)
+FfxSssrStatus ffxSssrReflectionViewGetDenoisingElapsedTime(FfxSssrContext context, FfxSssrReflectionView reflectionView, uint64_t* outDenoisingElapsedTime)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !outDenoisingElapsedTime)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrReflectionViewGetDenoisingElapsedTime);
+    FFX_SSSR_API_CALL(ctx, ffxSssrReflectionViewGetDenoisingElapsedTime);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
         ctx->GetReflectionViewDenoisingElapsedTime(reflection_view_id, *outDenoisingElapsedTime);
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrReflectionViewGetCameraParameters(SssrContext context, SssrReflectionView reflectionView, float* outViewMatrix, float* outProjectionMatrix)
+FfxSssrStatus ffxSssrReflectionViewGetCameraParameters(FfxSssrContext context, FfxSssrReflectionView reflectionView, float* outViewMatrix, float* outProjectionMatrix)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !outViewMatrix || !outProjectionMatrix)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrReflectionViewGetCameraParameters);
+    FFX_SSSR_API_CALL(ctx, ffxSssrReflectionViewGetCameraParameters);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
-        sssr::matrix4 reflection_view_view_matrix, reflection_view_projection_matrix;
+        ffx_sssr::matrix4 reflection_view_view_matrix, reflection_view_projection_matrix;
         ctx->GetReflectionViewViewMatrix(reflection_view_id, reflection_view_view_matrix);
         ctx->GetReflectionViewProjectionMatrix(reflection_view_id, reflection_view_projection_matrix);
 
@@ -374,32 +374,32 @@ SssrStatus sssrReflectionViewGetCameraParameters(SssrContext context, SssrReflec
             }
         }
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }
 
-SssrStatus sssrReflectionViewSetCameraParameters(SssrContext context, SssrReflectionView reflectionView, const float* pViewMatrix, const float* pProjectionMatrix)
+FfxSssrStatus ffxSssrReflectionViewSetCameraParameters(FfxSssrContext context, FfxSssrReflectionView reflectionView, const float* pViewMatrix, const float* pProjectionMatrix)
 {
-    auto const ctx = reinterpret_cast<sssr::Context*>(context);
+    auto const ctx = reinterpret_cast<ffx_sssr::Context*>(context);
 
     if (!ctx || !pViewMatrix || !pProjectionMatrix)
     {
-        return SSSR_STATUS_INVALID_VALUE;
+        return FFX_SSSR_STATUS_INVALID_VALUE;
     }
 
     auto const reflection_view_id = reinterpret_cast<std::uint64_t>(reflectionView);
 
-    if (!ctx->IsOfType<sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
+    if (!ctx->IsOfType<ffx_sssr::kResourceType_ReflectionView>(reflection_view_id) || !ctx->IsObjectValid(reflection_view_id))
     {
-        return SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
+        return FFX_SSSR_STATUS_INVALID_VALUE; // not a valid reflection view
     }
 
-    SSSR_API_CALL(ctx, sssrReflectionViewSetCameraParameters);
+    FFX_SSSR_API_CALL(ctx, ffxSssrReflectionViewSetCameraParameters);
 
-    SSSR_TRY
+    FFX_SSSR_TRY
     {
-        sssr::matrix4 reflection_view_view_matrix, reflection_view_projection_matrix;
+        ffx_sssr::matrix4 reflection_view_view_matrix, reflection_view_projection_matrix;
         for (auto row = 0u; row < 4u; ++row)
         {
             for (auto col = 0u; col < 4u; ++col)
@@ -411,7 +411,7 @@ SssrStatus sssrReflectionViewSetCameraParameters(SssrContext context, SssrReflec
         ctx->SetReflectionViewViewMatrix(reflection_view_id, reflection_view_view_matrix);
         ctx->SetReflectionViewProjectionMatrix(reflection_view_id, reflection_view_projection_matrix);
     }
-    SSSR_CATCH([](){})
+    FFX_SSSR_CATCH([](){})
 
-    return SSSR_STATUS_OK;
+    return FFX_SSSR_STATUS_OK;
 }

@@ -30,7 +30,7 @@ THE SOFTWARE.
 #include "ffx_sssr.h"
 #include "descriptor_heap_d3d12.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class Context;
     class ReflectionView;
@@ -40,13 +40,9 @@ namespace sssr
     */
     class ReflectionViewD3D12
     {
-        SSSR_NON_COPYABLE(ReflectionViewD3D12);
+        FFX_SSSR_NON_COPYABLE(ReflectionViewD3D12);
 
     public:
-        /**
-            The type definition for an individual ray counter.
-        */
-        using RayCount = std::pair<std::uint32_t, std::uint32_t>;
 
         /**
             The available timestamp queries.
@@ -71,7 +67,7 @@ namespace sssr
         */
         class ShaderPass
         {
-            SSSR_NON_COPYABLE(ShaderPass);
+            FFX_SSSR_NON_COPYABLE(ShaderPass);
 
         public:
             inline ShaderPass();
@@ -96,23 +92,23 @@ namespace sssr
         ReflectionViewD3D12(ReflectionViewD3D12&& other) noexcept;
         ReflectionViewD3D12& operator =(ReflectionViewD3D12&& other) noexcept;
 
-        void Create(Context& context, SssrCreateReflectionViewInfo const& create_reflection_view_info);
+        void Create(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
         void Destroy();
 
-        void CreateRootSignature(Context& context, SssrCreateReflectionViewInfo const& create_reflection_view_info);
+        void CreateRootSignature(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
         void CreatePipelineState(Context& context);
         void CreateDescriptorHeaps(Context& context);
 
         std::uint32_t GetTimestampQueryIndex() const;
 
-        void Resolve(Context& context, ReflectionView const& reflection_view, SssrResolveReflectionViewInfo const& resolve_reflection_view_info);
+        void Resolve(Context& context, ReflectionView const& reflection_view, FfxSssrResolveReflectionViewInfo const& resolve_reflection_view_info);
 
         // The width of the reflection view (in texels).
         std::uint32_t width_;
         // The height of the reflection view (in texels).
         std::uint32_t height_;
         // The reflection view creation flags.
-        SssrCreateReflectionViewFlags flags_;
+        FfxSssrCreateReflectionViewFlags flags_;
 
         // The descriptor heap for CBVs, SRVs, and UAVs.
         DescriptorHeapD3D12* descriptor_heap_cbv_srv_uav_;

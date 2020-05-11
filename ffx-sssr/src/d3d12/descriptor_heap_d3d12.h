@@ -26,7 +26,7 @@ THE SOFTWARE.
 
 #include "context.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class DescriptorHeapD3D12;
 
@@ -59,7 +59,7 @@ namespace sssr
     */
     class DescriptorHeapD3D12
     {
-        SSSR_NON_COPYABLE(DescriptorHeapD3D12);
+        FFX_SSSR_NON_COPYABLE(DescriptorHeapD3D12);
 
     public:
         DescriptorHeapD3D12(Context& context);

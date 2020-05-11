@@ -20,23 +20,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_SPATIAL_RESOLVE
-#define SSR_SPATIAL_RESOLVE
+#ifndef FFX_SSSR_SPATIAL_RESOLVE
+#define FFX_SSSR_SPATIAL_RESOLVE
 
-// In:
-Texture2D<SSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer          : register(t0);
-Texture2D<SSR_NORMALS_TEXTURE_FORMAT> g_normal              : register(t1);
-Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness         : register(t2);
-Texture2D<float4> g_intersection_result                     : register(t3); // reflection colors at the end of the intersect pass. 
-Texture2D<float> g_has_ray                                  : register(t4);
-Buffer<uint> g_tile_list                                    : register(t5);
+Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>        g_depth_buffer  : register(t0);
+Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>      g_normal        : register(t1);
+Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>    g_roughness     : register(t2);
 
-// Sampler:
-SamplerState g_linear_sampler                               : register(s0);
+SamplerState g_linear_sampler                                   : register(s0);
 
-// Out:
-RWTexture2D<float4> g_spatially_denoised_reflections        : register(u0);
-RWTexture2D<float> g_ray_lengths                            : register(u1);
+RWTexture2D<float4> g_spatially_denoised_reflections            : register(u0);
+RWTexture2D<float>  g_ray_lengths                               : register(u1);
+RWTexture2D<float4> g_intersection_result                       : register(u2); // Reflection colors at the end of the intersect pass. 
+RWTexture2D<float>  g_has_ray                                   : register(u3);
+RWBuffer<uint>      g_tile_list                                 : register(u4);
 
 
 // Only really need 16x16 but 17x17 avoids bank conflicts.
@@ -78,7 +75,7 @@ void StoreInGroupSharedMemory(int2 idx, min16float4 radiance, min16float3 normal
 
 min16float LoadRayLengthFP16(int2 idx)
 {
-   return g_ray_lengths.Load(int3(idx, 0));
+   return g_ray_lengths.Load(idx);
 }
 
 min16float3 LoadRadianceFP16(int2 idx)
@@ -88,12 +85,12 @@ min16float3 LoadRadianceFP16(int2 idx)
 
 min16float3 LoadNormalFP16(int2 idx)
 {
-    return (min16float3) SssrUnpackNormals(g_normal.Load(int3(idx, 0)));
+    return (min16float3) FfxSssrUnpackNormals(g_normal.Load(int3(idx, 0)));
 }
 
 float LoadDepth(int2 idx)
 {
-    return SssrUnpackDepth(g_depth_buffer.Load(int3(idx, 0)));
+    return FfxSssrUnpackDepth(g_depth_buffer.Load(int3(idx, 0)));
 }
 
 bool LoadHasRay(int2 idx)
@@ -115,11 +112,6 @@ void StoreWithOffset(int2 gtid, int2 offset, min16float ray_length, min16float3 
 {
     gtid += offset;
     StoreInGroupSharedMemory(gtid, min16float4(radiance, ray_length), normal, depth); // Pack ray length and radiance together
-}
-
-int Linearize(int2 gtid)
-{
-    return (gtid.y * 8 + gtid.x) % WaveGetLaneCount(); // The copy approach works only for machines with at least 16 lanes.
 }
 
 void InitializeGroupSharedMemory(int2 did, int2 gtid)
@@ -168,9 +160,9 @@ void InitializeGroupSharedMemory(int2 did, int2 gtid)
     LoadWithOffset(did, offset_3, ray_length_3, radiance_3, normal_3, depth_3, has_ray_3); // C
 
     // If own values are invalid, because no ray created them, lookup the values from the neighboring threads
-    const int base_lane_index = Linearize(GetBaseIdx(gtid, samples_per_quad)); // No matter the offset, we always get the same base lane index.
-    const bool is_base_ray = IsBaseRay(gtid, samples_per_quad); // Same here: no matter the offset, we always get the same result.
     const int lane_index = WaveGetLaneIndex();
+    const int base_lane_index = GetBaseLane(lane_index, samples_per_quad); // As offsets are multiples of 8, we always get the same base lane index no matter the offset.
+    const bool is_base_ray = base_lane_index == lane_index;
 
     const int lane_index_0 = (has_ray_0 || is_base_ray) ? lane_index : base_lane_index;
     const int lane_index_1 = (has_ray_1 || is_base_ray) ? lane_index : base_lane_index;
@@ -193,7 +185,6 @@ void InitializeGroupSharedMemory(int2 did, int2 gtid)
     StoreWithOffset(gtid, offset_3, ray_length_3, radiance_3, normal_3, depth_3); // C
 }
 
-// Calculates SSR color
 min16float3 ResolveScreenspaceReflections(int2 gtid, min16float3 center_radiance, min16float3 center_normal, float center_depth)
 {
     float3 accumulated_radiance = center_radiance;
@@ -248,7 +239,7 @@ void Resolve(int2 did, int2 gtid)
     InitializeGroupSharedMemory(did, gtid);
     GroupMemoryBarrierWithGroupSync();
 
-    if (!DoSSR(center_roughness) || IsMirrorReflection(center_roughness))
+    if (!IsGlossy(center_roughness) || IsMirrorReflection(center_roughness))
     {
         return;
     }
@@ -262,13 +253,14 @@ void Resolve(int2 did, int2 gtid)
     g_ray_lengths[did.xy] = center_radiance.w; // ray_length
 }
 
-[numthreads(8, 8, 1)]
-void main(uint2 group_thread_id : SV_GroupThreadID, uint group_id : SV_GroupID)
+[numthreads(64, 1, 1)]
+void main(uint group_thread_id_linear : SV_GroupThreadID, uint group_id : SV_GroupID)
 {
     uint packed_base_coords = g_tile_list[group_id];
     uint2 base_coords = Unpack(packed_base_coords);
-    uint2 coords = base_coords + group_thread_id;
-    Resolve((int2)coords, (int2)group_thread_id);
+    uint2 group_thread_id_2d = RemapLane8x8(group_thread_id_linear);
+    uint2 coords = base_coords + group_thread_id_2d;
+    Resolve((int2)coords, (int2)group_thread_id_2d);
 }
 
-#endif // SSR_SPATIAL_RESOLVE
+#endif // FFX_SSSR_SPATIAL_RESOLVE

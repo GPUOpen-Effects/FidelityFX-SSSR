@@ -20,19 +20,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_EAW_RESOLVE
-#define SSR_EAW_RESOLVE
+#ifndef FFX_SSSR_EAW_RESOLVE
+#define FFX_SSSR_EAW_RESOLVE
 
-// In:
-Texture2D<SSR_NORMALS_TEXTURE_FORMAT> g_normal              : register(t0);
-Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness         : register(t1);
-Texture2D<SSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer          : register(t2);
-Buffer<uint> g_tile_list                                    : register(t3);
-SamplerState g_linear_sampler                               : register(s0);
+Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>      g_normal            : register(t0);
+Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>    g_roughness         : register(t1);
+Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>        g_depth_buffer      : register(t2);
 
-// Out:
-RWTexture2D<float4> g_temporally_denoised_reflections       : register(u0);
-RWTexture2D<float4> g_denoised_reflections                  : register(u1); // will hold the reflection colors at the end of the resolve pass. 
+SamplerState g_linear_sampler                                       : register(s0);
+
+RWTexture2D<float4> g_temporally_denoised_reflections               : register(u0);
+RWTexture2D<float4> g_denoised_reflections                          : register(u1); // Will hold the reflection colors at the end of the resolve pass. 
+RWBuffer<uint>      g_tile_list                                     : register(u2);
 
 min16float3 LoadRadiance(int2 idx)
 {
@@ -41,7 +40,7 @@ min16float3 LoadRadiance(int2 idx)
 
 min16float LoadRoughnessValue(int2 idx)
 {
-    return SssrUnpackRoughness(g_roughness.Load(int3(idx, 0)));
+    return FfxSssrUnpackRoughness(g_roughness.Load(int3(idx, 0)));
 }
 
 min16float GetRoughnessRadiusWeight(min16float roughness_p, min16float roughness_q, min16float dist)
@@ -49,7 +48,6 @@ min16float GetRoughnessRadiusWeight(min16float roughness_p, min16float roughness
     return 1.0 - smoothstep(10 * roughness_p, 500 * roughness_p, dist);
 }
 
-// Calculates SSR color
 min16float4 ResolveScreenspaceReflections(int2 did, min16float center_roughness)
 {
     const min16float roughness_sigma_min = 0.001;
@@ -63,7 +61,7 @@ min16float4 ResolveScreenspaceReflections(int2 did, min16float center_roughness)
     {
         for (int dx = -radius; dx <= radius; ++dx)
         {
-            int2 texel_coords = did + SSR_EAW_STRIDE * int2(dx, dy);
+            int2 texel_coords = did + FFX_SSSR_EAW_STRIDE * int2(dx, dy);
 
             min16float3 radiance = LoadRadiance(texel_coords);
             min16float roughness = LoadRoughnessValue(texel_coords);
@@ -83,7 +81,7 @@ void Resolve(int2 did)
 {
     min16float3 center_radiance = LoadRadiance(did);
     min16float center_roughness = LoadRoughnessValue(did);
-    if (!DoSSR(center_roughness) || IsMirrorReflection(center_roughness))
+    if (!IsGlossy(center_roughness) || IsMirrorReflection(center_roughness))
     {
         return;
     }
@@ -99,4 +97,4 @@ void main(uint2 group_thread_id : SV_GroupThreadID, uint group_id : SV_GroupID)
     Resolve((int2)coords);
 }
 
-#endif // SSR_EAW_RESOLVE
+#endif // FFX_SSSR_EAW_RESOLVE

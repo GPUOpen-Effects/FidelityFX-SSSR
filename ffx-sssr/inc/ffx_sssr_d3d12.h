@@ -27,16 +27,16 @@ THE SOFTWARE.
 /**
     The parameters for creating a Direct3D12 context.
 */
-typedef struct SssrCreateContextInfoD3D12
+typedef struct FfxSssrD3D12CreateContextInfo
 {
     ID3D12Device* pDevice;
     ID3D12GraphicsCommandList* pUploadCommandList; ///< Command list to upload static resources. The application has to synchronize to make sure the uploads are done.
-} SssrCreateContextInfoD3D12;
+} FfxSssrD3D12CreateContextInfo;
 
 /**
     The parameters for creating a Direct3D12 reflection view.
 */
-typedef struct SssrCreateReflectionViewInfoD3D12
+typedef struct FfxSssrD3D12CreateReflectionViewInfo
 {
     DXGI_FORMAT sceneFormat; ///< The format of the sceneSRV to allow creating matching internal resources.
     D3D12_CPU_DESCRIPTOR_HANDLE sceneSRV; ///< The rendered scene without reflections. The descriptor handle must be allocated on a heap allowing CPU reads.
@@ -49,12 +49,12 @@ typedef struct SssrCreateReflectionViewInfoD3D12
     D3D12_CPU_DESCRIPTOR_HANDLE environmentMapSRV; ///< Environment cube map serving as a fallback for ray misses. The descriptor handle must be allocated on a heap allowing CPU reads.
     const D3D12_STATIC_SAMPLER_DESC * pEnvironmentMapSamplerDesc; ///< Description for the environment map sampler.
     D3D12_CPU_DESCRIPTOR_HANDLE reflectionViewUAV; ///< The fully resolved reflection view. Make sure to synchronize for UAV writes. The descriptor handle must be allocated on a heap allowing CPU reads.
-} SssrCreateReflectionViewInfoD3D12;
+} FfxSssrD3D12CreateReflectionViewInfo;
 
 /**
     \brief The parameters for encoding Direct3D12 device commands.
 */
-typedef struct SssrCommandEncodeInfoD3D12
+typedef struct FfxSssrD3D12CommandEncodeInfo
 {
     ID3D12GraphicsCommandList* pCommandList; ///< The Direct3D12 command list to be used for command encoding.
-} SssrCommandEncodeInfoD3D12;
+} FfxSssrD3D12CommandEncodeInfo;

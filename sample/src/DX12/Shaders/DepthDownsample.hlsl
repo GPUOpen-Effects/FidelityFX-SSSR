@@ -20,8 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_DEPTH_DOWNSAMPLE
-#define SSR_DEPTH_DOWNSAMPLE
+#ifndef FFX_SSSR_DEPTH_DOWNSAMPLE
+#define FFX_SSSR_DEPTH_DOWNSAMPLE
 
 Texture2D<float> g_depth_buffer : register(t0);
 RWTexture2D<float> g_downsampled_depth_buffer[13] : register(u0); // 12 is the maximum amount of supported mips by the downsampling lib (4096x4096). We copy the depth buffer over for simplicity.
@@ -37,17 +37,17 @@ groupshared uint g_group_shared_counter;
 #define DS_FALLBACK
 
 // Define fetch and store functions
-AF4 DSLoadSourceImage(ASU2 index) { return g_depth_buffer[index].xxxx; }
-AF4 DSLoad(ASU2 index) { return g_downsampled_depth_buffer[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
-void DSStore(ASU2 pix, AF4 outValue, AU1 index) { g_downsampled_depth_buffer[index + 1][pix] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
-void DSIncreaseAtomicCounter() { InterlockedAdd(g_global_atomic[0], 1, g_group_shared_counter); }
-AU1 DSGetAtomicCounter() { return g_group_shared_counter; }
-AF4 DSLoadIntermediate(AU1 x, AU1 y) { 
+AF4 SpdLoadSourceImage(ASU2 index) { return g_depth_buffer[index].xxxx; }
+AF4 SpdLoad(ASU2 index) { return g_downsampled_depth_buffer[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
+void SpdStore(ASU2 pix, AF4 outValue, AU1 index) { g_downsampled_depth_buffer[index + 1][pix] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+void SpdIncreaseAtomicCounter() { InterlockedAdd(g_global_atomic[0], 1, g_group_shared_counter); }
+AU1 SpdGetAtomicCounter() { return g_group_shared_counter; }
+AF4 SpdLoadIntermediate(AU1 x, AU1 y) {
 	float f = g_group_shared_depth_values[x][y];
 	return f.xxxx; 
 }
-void DSStoreIntermediate(AU1 x, AU1 y, AF4 value) { g_group_shared_depth_values[x][y] = value.x; }
-AF4 DSReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3) { return min(min(v0, v1), min(v2,v3)); }
+void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value) { g_group_shared_depth_values[x][y] = value.x; }
+AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3) { return min(min(v0, v1), min(v2,v3)); }
 
 #include "ffx_spd.h"
 
@@ -89,11 +89,11 @@ void main(uint3 did : SV_DispatchThreadID, uint3 gid : SV_GroupID, uint gi : SV_
     float mips_count = GetMipsCount(image_size);
     uint threadgroup_count = GetThreadgroupCount(image_size);
 
-	Downsample(
+	SpdDownsample(
 		AU2(gid.xy),
 		AU1(gi),
 		AU1(mips_count),
 		AU1(threadgroup_count));
 }
 
-#endif // SSR_DEPTH_DOWNSAMPLE
+#endif // FFX_SSSR_DEPTH_DOWNSAMPLE

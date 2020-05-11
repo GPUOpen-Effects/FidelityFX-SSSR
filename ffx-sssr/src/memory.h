@@ -29,7 +29,7 @@ THE SOFTWARE.
 #include "utils.h"
 #include "reflection_error.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The marker for an invalid index.
@@ -46,7 +46,7 @@ namespace sssr
     */
     class IdDispenser
     {
-        SSSR_NON_COPYABLE(IdDispenser);
+        FFX_SSSR_NON_COPYABLE(IdDispenser);
 
     public:
         inline IdDispenser(std::uint32_t max_id_count);
@@ -78,7 +78,7 @@ namespace sssr
     template<typename TYPE>
     class SparseArray
     {
-        SSSR_NON_COPYABLE(SparseArray);
+        FFX_SSSR_NON_COPYABLE(SparseArray);
 
     public:
         /**
@@ -177,7 +177,7 @@ namespace sssr
     template<typename BLOCK_TYPE>
     class RingBuffer
     {
-        SSSR_NON_COPYABLE(RingBuffer);
+        FFX_SSSR_NON_COPYABLE(RingBuffer);
 
     public:
         RingBuffer(std::size_t size);

@@ -39,10 +39,10 @@ THE SOFTWARE.
 //    - uses the SampleRenderer to update all the state to the GPU and do the rendering
 //
 
-class SSSRSample : public FrameworkWindows
+class SssrSample : public FrameworkWindows
 {
 public:
-    SSSRSample(LPCSTR name);
+    SssrSample(LPCSTR name);
     void OnCreate(HWND hWnd);
     void OnDestroy();
     void OnRender();

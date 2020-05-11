@@ -28,7 +28,7 @@ THE SOFTWARE.
 #include "reflection_error.h"
 #include "utils.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the ShaderCompilerD3D12 class.
@@ -70,7 +70,7 @@ namespace sssr
     ShaderD3D12 ShaderCompilerD3D12::CompileShaderFile(char const* filename, char const* profile, LPCWSTR* arguments, std::uint32_t argument_count, DxcDefine* defines, std::uint32_t define_count)
     {
         HRESULT result;
-        SSSR_ASSERT(filename && profile);
+        FFX_SSSR_ASSERT(filename && profile);
 
         if (!LoadShaderCompiler())
         {
@@ -82,7 +82,7 @@ namespace sssr
         auto const shader_filename = StringToWString(filename);
         result = dxc_library_->CreateBlobFromFile(shader_filename.c_str(), nullptr, &dxc_source);
         if (FAILED(result))
-            throw reflection_error(context_, SSSR_STATUS_INVALID_OPERATION, "Could not create shader blob from %s", filename);
+            throw reflection_error(context_, FFX_SSSR_STATUS_INVALID_OPERATION, "Could not create shader blob from %s", filename);
 
         ShaderD3D12 shader = CompileShaderBlob(dxc_source, shader_filename.c_str(), profile, arguments, argument_count, defines, define_count);
 
@@ -94,7 +94,7 @@ namespace sssr
     ShaderD3D12 ShaderCompilerD3D12::CompileShaderString(char const * string, std::uint32_t string_size, char const* shader_name, char const * profile, LPCWSTR * arguments, std::uint32_t argument_count, DxcDefine * defines, std::uint32_t define_count)
     {
         HRESULT result;
-        SSSR_ASSERT(string && profile);
+        FFX_SSSR_ASSERT(string && profile);
 
         if (!LoadShaderCompiler())
         {
@@ -104,7 +104,7 @@ namespace sssr
         IDxcBlobEncoding* dxc_source;
         result = dxc_library_->CreateBlobWithEncodingFromPinned((LPBYTE)string, string_size, 0, &dxc_source);
         if (FAILED(result))
-            throw reflection_error(context_, SSSR_STATUS_INVALID_OPERATION, "Could not create blob with encoding from pinned for %s", shader_name);
+            throw reflection_error(context_, FFX_SSSR_STATUS_INVALID_OPERATION, "Could not create blob with encoding from pinned for %s", shader_name);
 
         auto const wc_shader_name = StringToWString(shader_name);
 
@@ -122,19 +122,19 @@ namespace sssr
         {
             HRESULT result = dxc_dll_support_.Initialize();
             if (FAILED(result))
-                throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Unable to initialize dxcompiler.dll support");
+                throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to initialize dxcompiler.dll support");
 
             result = dxc_dll_support_.CreateInstance(CLSID_DxcCompiler, &dxc_compiler_);
             if (FAILED(result))
-                throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Unable to create DXC compiler instance");
+                throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to create DXC compiler instance");
 
             result = dxc_dll_support_.CreateInstance(CLSID_DxcLibrary, &dxc_library_);
             if (FAILED(result))
-                throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Unable to create DXC library instance");
+                throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to create DXC library instance");
 
             result = dxc_library_->CreateIncludeHandler(&dxc_include_handler_);
             if (FAILED(result))
-                throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Unable to create DXC include handler");
+                throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to create DXC include handler");
         }
         else if (!dxc_compiler_ || !dxc_library_)
         {
@@ -179,7 +179,7 @@ namespace sssr
 
         // Check for compilation errors
         if (FAILED(result))
-            throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Failed to compile D3D12 shader source code");
+            throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to compile D3D12 shader source code");
         if (FAILED(dxc_result->GetStatus(&result)) || FAILED(result))
         {
             IDxcBlobEncoding* dxc_error;
@@ -187,19 +187,19 @@ namespace sssr
             std::string const error(static_cast<char const*>(dxc_error->GetBufferPointer()));
             dxc_result->Release();
             dxc_error->Release();
-            throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Unable to compile shader file:\r\n> %s", error.c_str());
+            throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to compile shader file:\r\n> %s", error.c_str());
         }
 
         // Get hold of the program blob
         IDxcBlob* dxc_program = nullptr;
         dxc_result->GetResult(&dxc_program);
-        SSSR_ASSERT(dxc_program != nullptr);
+        FFX_SSSR_ASSERT(dxc_program != nullptr);
         dxc_result->Release();
 
         // Retrieve the shader bytecode
         shader.BytecodeLength = dxc_program->GetBufferSize();
         auto const shader_bytecode = malloc(shader.BytecodeLength);
-        SSSR_ASSERT(shader_bytecode != nullptr);  // out of memory
+        FFX_SSSR_ASSERT(shader_bytecode != nullptr);  // out of memory
         memcpy(shader_bytecode, dxc_program->GetBufferPointer(), shader.BytecodeLength);
         shader.pShaderBytecode = shader_bytecode;
         dxc_program->Release();

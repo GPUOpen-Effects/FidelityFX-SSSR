@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the Block class.
@@ -40,7 +40,7 @@ namespace sssr
     */
     bool UploadBufferD3D12::Block::CanBeReused() const
     {
-        SSSR_ASSERT(frame_index_ && *frame_index_ >= block_index_);
+        FFX_SSSR_ASSERT(frame_index_ && *frame_index_ >= block_index_);
 
         return (*frame_index_ - block_index_ >= frame_count_before_reuse_);
     }
@@ -76,7 +76,7 @@ namespace sssr
         if (!data)
             return 0ull;
         auto const offset = static_cast<char const*>(data) - static_cast<char const*>(data_);
-        SSSR_ASSERT(buffer_ && data >= data_ && static_cast<UINT64>(offset) < buffer_->GetDesc().Width);  // buffer overflow!
+        FFX_SSSR_ASSERT(buffer_ && data >= data_ && static_cast<UINT64>(offset) < buffer_->GetDesc().Width);  // buffer overflow!
         return static_cast<std::size_t>(offset);
     }
 

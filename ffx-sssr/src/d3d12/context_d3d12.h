@@ -30,7 +30,7 @@ THE SOFTWARE.
 #include "upload_buffer_d3d12.h"
 #include "shader_compiler_d3d12.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class Context;
     class ReflectionViewD3D12;
@@ -40,7 +40,7 @@ namespace sssr
     */
     class ContextD3D12
     {
-        SSSR_NON_COPYABLE(ContextD3D12);
+        FFX_SSSR_NON_COPYABLE(ContextD3D12);
 
     public:
         /**
@@ -60,7 +60,7 @@ namespace sssr
             kShader_Count
         };
 
-        ContextD3D12(Context& context, SssrCreateContextInfo const& create_context_info);
+        ContextD3D12(Context& context, FfxSssrCreateContextInfo const& create_context_info);
         ~ContextD3D12();
 
         inline Context& GetContext();
@@ -76,8 +76,8 @@ namespace sssr
         void GetReflectionViewIntersectionElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const;
         void GetReflectionViewDenoisingElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const;
 
-        void CreateReflectionView(std::uint64_t reflection_view_id, SssrCreateReflectionViewInfo const& create_reflection_view_info);
-        void ResolveReflectionView(std::uint64_t reflection_view_id, SssrResolveReflectionViewInfo const& resolve_reflection_view_info);
+        void CreateReflectionView(std::uint64_t reflection_view_id, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
+        void ResolveReflectionView(std::uint64_t reflection_view_id, FfxSssrResolveReflectionViewInfo const& resolve_reflection_view_info);
 
         static inline ID3D12Device* GetValidDevice(Context& context, ID3D12Device* device);
         static inline ID3D12GraphicsCommandList* GetCommandList(Context& context, ID3D12GraphicsCommandList* command_list);
@@ -110,7 +110,7 @@ namespace sssr
 
         // The execution context.
         Context& context_;
-        // The DXR device to be used.
+        // The device to be used.
         ID3D12Device* device_;
         // The compiled reflections shaders.
         std::map<ShaderKey, ShaderD3D12> shaders_;

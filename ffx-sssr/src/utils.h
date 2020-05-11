@@ -22,8 +22,9 @@ THE SOFTWARE.
 #pragma once
 
 #include "macros.h"
+#include <string>
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         Checks whether the value is a power of two.
@@ -47,7 +48,7 @@ namespace sssr
     template<typename TYPE>
     static inline TYPE Align(TYPE value, TYPE alignment)
     {
-        SSSR_ASSERT(IsPowerOfTwo(alignment));
+        FFX_SSSR_ASSERT(IsPowerOfTwo(alignment));
         return (value + alignment - 1) & (~(alignment - 1));
     }
 

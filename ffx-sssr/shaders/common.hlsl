@@ -20,35 +20,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_COMMON
-#define SSR_COMMON
+#ifndef FFX_SSSR_COMMON
+#define FFX_SSSR_COMMON
 
-#define SSR_PI                                  3.14159265358979f
-#define SSR_GOLDEN_RATIO                        1.61803398875f
+#define FFX_SSSR_PI                                  3.14159265358979f
+#define FFX_SSSR_GOLDEN_RATIO                        1.61803398875f
 
-#define SSR_FLOAT_MAX                           3.402823466e+38
+#define FFX_SSSR_FLOAT_MAX                           3.402823466e+38
 
-#define SSR_FALSE                               0
-#define SSR_TRUE                                1
+#define FFX_SSSR_FALSE                               0
+#define FFX_SSSR_TRUE                                1
 
-#define SSR_USE_ROUGHNESS_OVERRIDE              SSR_FALSE
-#define SSR_ROUGHNESS_OVERRIDE                  0.1
+#define FFX_SSSR_USE_ROUGHNESS_OVERRIDE              FFX_SSSR_FALSE
+#define FFX_SSSR_ROUGHNESS_OVERRIDE                  0.1
 
-#define SSR_TEMPORAL_VARIANCE_THRESHOLD         0.0005
+#define FFX_SSSR_TEMPORAL_VARIANCE_THRESHOLD         0.0005
 
-#if SSR_USE_ROUGHNESS_OVERRIDE
-float SssrUnpackRoughness(SSR_ROUGHNESS_TEXTURE_FORMAT packed) { return SSR_ROUGHNESS_OVERRIDE; }
+#if FFX_SSSR_USE_ROUGHNESS_OVERRIDE
+float FfxSssrUnpackRoughness(FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT packed) { return FFX_SSSR_ROUGHNESS_OVERRIDE; }
 #else
-SSR_ROUGHNESS_UNPACK_FUNCTION
+FFX_SSSR_ROUGHNESS_UNPACK_FUNCTION
 #endif
 
-SSR_NORMALS_UNPACK_FUNCTION
-SSR_MOTION_VECTOR_UNPACK_FUNCTION
-SSR_DEPTH_UNPACK_FUNCTION
-SSR_SCENE_RADIANCE_UNPACK_FUNCTION
+FFX_SSSR_NORMALS_UNPACK_FUNCTION
+FFX_SSSR_MOTION_VECTOR_UNPACK_FUNCTION
+FFX_SSSR_DEPTH_UNPACK_FUNCTION
+FFX_SSSR_SCENE_RADIANCE_UNPACK_FUNCTION
 
 // Common constants
-cbuffer SSRConstants : register(b0)
+cbuffer Constants : register(b0)
 {
     float4x4 g_inv_view_proj;
     float4x4 g_proj;
@@ -112,17 +112,17 @@ Ray CreateViewSpaceRay(float3 screen_space_pos)
     return view_space_ray;
 }
 
-float3 LoadNormal(int2 index, Texture2D<SSR_NORMALS_TEXTURE_FORMAT> tex)
+float3 LoadNormal(int2 index, Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT> tex)
 {
-    return SssrUnpackNormals(tex.Load(int3(index, 0)));
+    return FfxSssrUnpackNormals(tex.Load(int3(index, 0)));
 }
 
-float LoadRoughness(int2 index, Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> tex)
+float LoadRoughness(int2 index, Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> tex)
 {
-    return SssrUnpackRoughness(tex.Load(int3(index, 0)));
+    return FfxSssrUnpackRoughness(tex.Load(int3(index, 0)));
 }
 
-bool DoSSR(float roughness)
+bool IsGlossy(float roughness)
 {
     return roughness < g_roughness_threshold;
 }
@@ -189,17 +189,21 @@ bool IsBaseRay(uint2 did, uint samples_per_quad)
     }
 }
 
-// Has to match the calculation in IsBaseRay
-uint2 GetBaseIdx(uint2 did, uint samples_per_quad)
+// Has to match the calculation in IsBaseRay. Assumes lane is in Z order.
+// i.e. 4 consecutive lanes 0 1 2 3
+// are remapped to 
+// 0 1
+// 2 3
+uint GetBaseLane(uint lane, uint samples_per_quad)
 {
     switch (samples_per_quad)
     {
     case 1:
-        return did & ~(0x1);
+        return lane & (~0b11); // Map to upper left
     case 2:
-        return uint2(did.x ^ 1, did.y); // Toggle last bit of x
+        return lane ^ 0b1; // Toggle horizontal
     default: // case 4:
-        return did;
+        return lane; // Identity
     }
 }
 
@@ -216,4 +220,24 @@ min16float2 UnpackFloat16(uint a)
     return min16float2(tmp);
 }
 
-#endif // SSR_COMMON
+
+// From ffx_a.h
+
+
+
+uint BitfieldExtract(uint src, uint off, uint bits) { uint mask = (1 << bits) - 1; return (src >> off) & mask; } // ABfe
+uint BitfieldInsert(uint src, uint ins, uint bits) { uint mask = (1 << bits) - 1; return (ins & mask) | (src & (~mask)); } // ABfiM
+
+//  LANE TO 8x8 MAPPING
+//  ===================
+//  00 01 08 09 10 11 18 19 
+//  02 03 0a 0b 12 13 1a 1b
+//  04 05 0c 0d 14 15 1c 1d
+//  06 07 0e 0f 16 17 1e 1f 
+//  20 21 28 29 30 31 38 39 
+//  22 23 2a 2b 32 33 3a 3b
+//  24 25 2c 2d 34 35 3c 3d
+//  26 27 2e 2f 36 37 3e 3f 
+uint2 RemapLane8x8(uint lane) { return uint2(BitfieldInsert(BitfieldExtract(lane, 2u, 3u), lane, 1u), BitfieldInsert(BitfieldExtract(lane, 3u, 3u), BitfieldExtract(lane, 1u, 2u), 2u)); } // ARmpRed8x8
+
+#endif // FFX_SSSR_COMMON

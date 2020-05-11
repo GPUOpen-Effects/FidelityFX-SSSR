@@ -25,7 +25,7 @@ THE SOFTWARE.
 #include "context.h"
 #include "context_d3d12.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the UploadBufferD3D12 class.
@@ -39,7 +39,7 @@ namespace sssr
         , buffer_(nullptr)
         , blocks_(buffer_size)
     {
-        SSSR_ASSERT(context.GetDevice());
+        FFX_SSSR_ASSERT(context.GetDevice());
 
         D3D12_HEAP_PROPERTIES heap_properties = {};
         heap_properties.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -62,7 +62,7 @@ namespace sssr
                                                                     nullptr,
                                                                     IID_PPV_ARGS(&buffer_))))
         {
-            throw reflection_error(context_, SSSR_STATUS_OUT_OF_MEMORY, "Failed to allocate %uMiB for the upload buffer", RoundedDivide(buffer_size, 1024ull * 1024ull));
+            throw reflection_error(context_, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Failed to allocate %uMiB for the upload buffer", RoundedDivide(buffer_size, 1024ull * 1024ull));
         }
 
         D3D12_RANGE range = {};
@@ -73,7 +73,7 @@ namespace sssr
                                     &range,
                                     reinterpret_cast<void**>(&data_))))
         {
-            throw reflection_error(context_, SSSR_STATUS_INTERNAL_ERROR, "Cannot map the Direct3D12 upload buffer");
+            throw reflection_error(context_, FFX_SSSR_STATUS_INTERNAL_ERROR, "Cannot map the Direct3D12 upload buffer");
         }
 
         buffer_->SetName(L"UploadBufferRing");
@@ -138,7 +138,7 @@ namespace sssr
     void UploadBufferD3D12::CreateConstantBufferView(void const* data, std::size_t size, D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor) const
     {
         auto const offset = static_cast<char const*>(data) - static_cast<char const*>(data_);
-        SSSR_ASSERT(buffer_ && data >= data_ && offset + size <= buffer_->GetDesc().Width);   // buffer overflow!
+        FFX_SSSR_ASSERT(buffer_ && data >= data_ && offset + size <= buffer_->GetDesc().Width);   // buffer overflow!
 
         D3D12_CONSTANT_BUFFER_VIEW_DESC constant_buffer_view_desc = {};
         constant_buffer_view_desc.BufferLocation = buffer_->GetGPUVirtualAddress() + offset;
@@ -159,7 +159,7 @@ namespace sssr
     void UploadBufferD3D12::CreateShaderResourceView(void const* data, std::size_t size, std::size_t stride, D3D12_CPU_DESCRIPTOR_HANDLE cpu_descriptor) const
     {
         auto const offset = static_cast<char const*>(data) - static_cast<char const*>(data_);
-        SSSR_ASSERT(buffer_ && data >= data_ && offset + size <= buffer_->GetDesc().Width);   // buffer overflow!
+        FFX_SSSR_ASSERT(buffer_ && data >= data_ && offset + size <= buffer_->GetDesc().Width);   // buffer overflow!
 
         D3D12_SHADER_RESOURCE_VIEW_DESC shader_resource_view_desc = {};
         shader_resource_view_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;

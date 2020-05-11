@@ -20,8 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_APPLY
-#define SSR_APPLY
+#ifndef FFX_SSSR_APPLY
+#define FFX_SSSR_APPLY
 
 Texture2D<float4> reflectionTarget              : register(t0);
 Texture2D<float4> normalsTexture                : register(t1);
@@ -95,4 +95,4 @@ float4 ps_main(VertexOut input) : SV_Target0
     }
 }
 
-#endif // SSR_APPLY
+#endif // FFX_SSSR_APPLY

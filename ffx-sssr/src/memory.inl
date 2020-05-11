@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the IdDispenser class.
@@ -39,7 +39,7 @@ namespace sssr
         {
             free(ids_);
 
-            throw reflection_error(SSSR_STATUS_OUT_OF_MEMORY);
+            throw reflection_error(FFX_SSSR_STATUS_OUT_OF_MEMORY);
         }
 
         // Initialize the freelist
@@ -62,11 +62,11 @@ namespace sssr
 #if 0
         auto const leaked_id_count = (max_id_count_ - CalculateFreeIdCount());
 
-        SSSR_ASSERT(leaked_id_count == id_count_);
+        FFX_SSSR_ASSERT(leaked_id_count == id_count_);
 
         if (leaked_id_count)
         {
-            SSSR_PRINTLN("%u resource%s %s not destroyed properly; detected memory leak", leaked_id_count, leaked_id_count > 1 ? "s" : "", leaked_id_count > 1 ? "were" : "was");
+            FFX_SSSR_PRINTLN("%u resource%s %s not destroyed properly; detected memory leak", leaked_id_count, leaked_id_count > 1 ? "s" : "", leaked_id_count > 1 ? "were" : "was");
         }
 #endif
 
@@ -102,7 +102,7 @@ namespace sssr
         slot = (static_cast<std::uint64_t>(age) << 32) | static_cast<std::uint64_t>(kInvalidIndex);
 
         // Keep track of number of allocated identifiers
-        SSSR_ASSERT(id_count_ < max_id_count_);
+        FFX_SSSR_ASSERT(id_count_ < max_id_count_);
         ++id_count_;
 
         return true;
@@ -117,7 +117,7 @@ namespace sssr
     {
         // Get hold of the freed slot
         auto const index = static_cast<std::uint32_t>(id & 0xFFFFFFFFull);
-        SSSR_ASSERT(index < max_id_count_);
+        FFX_SSSR_ASSERT(index < max_id_count_);
         auto& slot = ids_[index];
 
         // Check whether this is a valid operation
@@ -133,7 +133,7 @@ namespace sssr
         next_index_ = index;
 
         // Keep track of number of allocated identifiers
-        SSSR_ASSERT(id_count_ > 0u);
+        FFX_SSSR_ASSERT(id_count_ > 0u);
         --id_count_;
     }
 
@@ -167,7 +167,7 @@ namespace sssr
     {
         // Get hold of the corresponding slot
         auto const index = static_cast<std::uint32_t>(id & 0xFFFFFFFFull);
-        SSSR_ASSERT(index < max_id_count_);
+        FFX_SSSR_ASSERT(index < max_id_count_);
         auto const slot = ids_[index];
 
         // Check whether the identifier is still valid
@@ -195,7 +195,7 @@ namespace sssr
         {
             ++free_id_count;
         }
-        SSSR_ASSERT(free_id_count <= max_id_count_);
+        FFX_SSSR_ASSERT(free_id_count <= max_id_count_);
 
         return free_id_count;
     }
@@ -218,7 +218,7 @@ namespace sssr
     template<typename TYPE>
     typename SparseArray<TYPE>::iterator& SparseArray<TYPE>::iterator::operator ++()
     {
-        SSSR_ASSERT(array_ && index_ < array_->object_count_);
+        FFX_SSSR_ASSERT(array_ && index_ < array_->object_count_);
         ++index_;   // iterate to next
         return *this;
     }
@@ -231,7 +231,7 @@ namespace sssr
     template<typename TYPE>
     TYPE& SparseArray<TYPE>::iterator::operator *() const
     {
-        SSSR_ASSERT(array_ && index_ < array_->object_count_);
+        FFX_SSSR_ASSERT(array_ && index_ < array_->object_count_);
         return array_->objects_[index_];
     }
 
@@ -243,7 +243,7 @@ namespace sssr
     template<typename TYPE>
     SparseArray<TYPE>::iterator::operator std::uint32_t() const
     {
-        SSSR_ASSERT(array_ && index_ < array_->object_count_);
+        FFX_SSSR_ASSERT(array_ && index_ < array_->object_count_);
         return array_->virtual_indices_[index_];
     }
 
@@ -288,7 +288,7 @@ namespace sssr
     template<typename TYPE>
     typename SparseArray<TYPE>::const_iterator& SparseArray<TYPE>::const_iterator::operator ++()
     {
-        SSSR_ASSERT(array_ && index_ < array_->object_count_);
+        FFX_SSSR_ASSERT(array_ && index_ < array_->object_count_);
         ++index_;   // iterate to next
         return *this;
     }
@@ -301,7 +301,7 @@ namespace sssr
     template<typename TYPE>
     TYPE const& SparseArray<TYPE>::const_iterator::operator *() const
     {
-        SSSR_ASSERT(array_ && index_ < array_->object_count_);
+        FFX_SSSR_ASSERT(array_ && index_ < array_->object_count_);
         return array_->objects_[index_];
     }
 
@@ -313,7 +313,7 @@ namespace sssr
     template<typename TYPE>
     SparseArray<TYPE>::const_iterator::operator std::uint32_t() const
     {
-        SSSR_ASSERT(array_ && index_ < array_->object_count_);
+        FFX_SSSR_ASSERT(array_ && index_ < array_->object_count_);
         return array_->virtual_indices_[index_];
     }
 
@@ -348,7 +348,7 @@ namespace sssr
             free(virtual_indices_);
             free(physical_indices_);
 
-            throw reflection_error(SSSR_STATUS_OUT_OF_MEMORY);
+            throw reflection_error(FFX_SSSR_STATUS_OUT_OF_MEMORY);
         }
 
         // Invalidate all virtual entries
@@ -368,7 +368,7 @@ namespace sssr
 
         if (leaked_object_count)
         {
-            SSSR_PRINTLN("%u component%s %s not destroyed properly; detected memory leak", leaked_object_count, leaked_object_count > 1 ? "s" : "", leaked_object_count > 1 ? "were" : "was");
+            FFX_SSSR_PRINTLN("%u component%s %s not destroyed properly; detected memory leak", leaked_object_count, leaked_object_count > 1 ? "s" : "", leaked_object_count > 1 ? "were" : "was");
         }
 #endif
 
@@ -391,7 +391,7 @@ namespace sssr
     TYPE& SparseArray<TYPE>::operator [](std::uint32_t index)
     {
         auto const object = At(index);
-        SSSR_ASSERT(object != nullptr);
+        FFX_SSSR_ASSERT(object != nullptr);
         return *object;
     }
 
@@ -405,7 +405,7 @@ namespace sssr
     TYPE const& SparseArray<TYPE>::operator [](std::uint32_t index) const
     {
         auto const object = At(index);
-        SSSR_ASSERT(object != nullptr);
+        FFX_SSSR_ASSERT(object != nullptr);
         return *object;
     }
 
@@ -418,7 +418,7 @@ namespace sssr
     template<typename TYPE>
     TYPE* SparseArray<TYPE>::At(std::uint32_t index)
     {
-        SSSR_ASSERT(index < max_object_count_);
+        FFX_SSSR_ASSERT(index < max_object_count_);
         auto const physical_index = physical_indices_[index];
         if (physical_index == kInvalidIndex)
             return nullptr; // not found
@@ -434,7 +434,7 @@ namespace sssr
     template<typename TYPE>
     TYPE const* SparseArray<TYPE>::At(std::uint32_t index) const
     {
-        SSSR_ASSERT(index < max_object_count_);
+        FFX_SSSR_ASSERT(index < max_object_count_);
         auto const physical_index = physical_indices_[index];
         if (physical_index == kInvalidIndex)
             return nullptr; // not found
@@ -450,7 +450,7 @@ namespace sssr
     template<typename TYPE>
     bool SparseArray<TYPE>::Has(std::uint32_t index) const
     {
-        SSSR_ASSERT(index < max_object_count_);
+        FFX_SSSR_ASSERT(index < max_object_count_);
         return physical_indices_[index] != kInvalidIndex;
     }
 
@@ -463,14 +463,14 @@ namespace sssr
     template<typename TYPE>
     TYPE& SparseArray<TYPE>::Insert(std::uint32_t index)
     {
-        SSSR_ASSERT(index < max_object_count_);
+        FFX_SSSR_ASSERT(index < max_object_count_);
         auto const physical_index = physical_indices_[index];
         if (physical_index != kInvalidIndex)
         {
             (void)objects_[physical_index].~TYPE();
             return *new(&objects_[physical_index]) TYPE();
         }
-        SSSR_ASSERT(object_count_ < max_object_count_);
+        FFX_SSSR_ASSERT(object_count_ < max_object_count_);
         virtual_indices_[object_count_] = index;
         physical_indices_[index] = object_count_;
         return *new(&objects_[object_count_++]) TYPE();
@@ -486,14 +486,14 @@ namespace sssr
     template<typename TYPE>
     TYPE& SparseArray<TYPE>::Insert(std::uint32_t index, TYPE const& object)
     {
-        SSSR_ASSERT(index < max_object_count_);
+        FFX_SSSR_ASSERT(index < max_object_count_);
         auto const physical_index = physical_indices_[index];
         if (physical_index != kInvalidIndex)
         {
             (void)objects_[physical_index].~TYPE();
             return *new(&objects_[physical_index]) TYPE(object);
         }
-        SSSR_ASSERT(object_count_ < max_object_count_);
+        FFX_SSSR_ASSERT(object_count_ < max_object_count_);
         virtual_indices_[object_count_] = index;
         physical_indices_[index] = object_count_;
         return *new(&objects_[object_count_++]) TYPE(object);
@@ -508,11 +508,11 @@ namespace sssr
     template<typename TYPE>
     bool SparseArray<TYPE>::Erase(std::uint32_t index)
     {
-        SSSR_ASSERT(index < max_object_count_);
+        FFX_SSSR_ASSERT(index < max_object_count_);
         auto const physical_index = physical_indices_[index];
         if (physical_index == kInvalidIndex)
             return false;   // nothing to erase here
-        SSSR_ASSERT(object_count_ > 0u);
+        FFX_SSSR_ASSERT(object_count_ > 0u);
         if (physical_index != object_count_ - 1u)
         {
             std::swap(objects_[physical_index], objects_[object_count_ - 1u]);
@@ -591,7 +591,7 @@ namespace sssr
     template<typename TYPE>
     std::uint32_t SparseArray<TYPE>::GetVirtualIndex(std::uint32_t physical_index) const
     {
-        SSSR_ASSERT(physical_index < object_count_);
+        FFX_SSSR_ASSERT(physical_index < object_count_);
 
         return virtual_indices_[physical_index];
     }
@@ -605,7 +605,7 @@ namespace sssr
     template<typename TYPE>
     std::uint32_t SparseArray<TYPE>::GetPhysicalIndex(std::uint32_t virtual_index) const
     {
-        SSSR_ASSERT(virtual_index < max_object_count_);
+        FFX_SSSR_ASSERT(virtual_index < max_object_count_);
 
         return physical_indices_[virtual_index];
     }
@@ -772,7 +772,7 @@ namespace sssr
             }
             while (next_block && size > space_available);
         }
-        SSSR_ASSERT(size <= space_available);
+        FFX_SSSR_ASSERT(size <= space_available);
 
         // Insert the new block
         blocks_.emplace_back();
@@ -814,7 +814,7 @@ namespace sssr
     std::size_t RingBuffer<BLOCK_TYPE>::CalculateSpaceToNextAvailableBlock(Block const* next_block, std::size_t alignment) const
     {
         auto const new_head = Align(head_, alignment);
-        SSSR_ASSERT(!next_block || next_block->start_ + next_block->size_ > head_);
+        FFX_SSSR_ASSERT(!next_block || next_block->start_ + next_block->size_ > head_);
         return std::max(next_block ? next_block->start_ : size_, new_head) - new_head;
     }
 

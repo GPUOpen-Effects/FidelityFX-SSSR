@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.4)
 set(CMAKE_GENERATOR_PLATFORM x64)
 
-project (SSSRSample_${GFX_API})
+project (SssrSample_${GFX_API})
 
 # ouput exe to bin directory
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_HOME_DIRECTORY}/bin)

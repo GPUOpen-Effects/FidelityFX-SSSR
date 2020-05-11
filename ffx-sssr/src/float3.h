@@ -24,7 +24,7 @@ THE SOFTWARE.
 #include <cmath>
 #include <cstdint>
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The tfloat3 class represents a generic 3-wide vector.

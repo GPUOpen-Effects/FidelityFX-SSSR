@@ -17,6 +17,7 @@ To build this sample, the following tools are required:
 
 Then follow these steps:
 
+0) This repository makes use of https://git-lfs.github.com/ to store large files.
 1) Clone the repository with its submodules:
     ```
     > git clone https://github.com/GPUOpen-Effects/FidelityFX-SSSR.git --recurse-submodules

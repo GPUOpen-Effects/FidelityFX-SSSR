@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the DescriptorD3D12 class.
@@ -42,7 +42,7 @@ namespace sssr
     */
     D3D12_CPU_DESCRIPTOR_HANDLE DescriptorD3D12::GetCPUDescriptor(std::uint32_t descriptor_index) const
     {
-        SSSR_ASSERT(descriptor_index < descriptor_count_);
+        FFX_SSSR_ASSERT(descriptor_index < descriptor_count_);
         auto cpu_descriptor_handle = cpu_descriptor_handle_;
         cpu_descriptor_handle.ptr += static_cast<SIZE_T>(descriptor_index) * static_cast<SIZE_T>(descriptor_handle_size_);
         return cpu_descriptor_handle;
@@ -56,7 +56,7 @@ namespace sssr
     */
     D3D12_GPU_DESCRIPTOR_HANDLE DescriptorD3D12::GetGPUDescriptor(std::uint32_t descriptor_index) const
     {
-        SSSR_ASSERT(descriptor_index < descriptor_count_);
+        FFX_SSSR_ASSERT(descriptor_index < descriptor_count_);
         auto gpu_descriptor_handle = gpu_descriptor_handle_;
         gpu_descriptor_handle.ptr += static_cast<UINT64>(descriptor_index) * static_cast<UINT64>(descriptor_handle_size_);
         return gpu_descriptor_handle;
@@ -164,7 +164,7 @@ namespace sssr
 
         while (!dynamic_descriptor_heap_ranges_.empty() && dynamic_descriptor_heap_ranges_.front().Overlap(dynamic_descriptor_heap_range))
         {
-            SSSR_ASSERT(context_.GetFrameIndex() >= dynamic_descriptor_heap_ranges_.front().frame_index_);
+            FFX_SSSR_ASSERT(context_.GetFrameIndex() >= dynamic_descriptor_heap_ranges_.front().frame_index_);
 
             if (context_.GetFrameIndex() - dynamic_descriptor_heap_ranges_.front().frame_index_ < context_.GetFrameCountBeforeReuse())
             {

@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The ReflectionView class encapsulates the information for resolving a reflection view.

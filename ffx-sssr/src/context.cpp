@@ -21,40 +21,40 @@ THE SOFTWARE.
 ********************************************************************/
 #include "context.h"
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
     #include "ffx_sssr_d3d12.h"
     #include "d3d12/context_d3d12.h"
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the Context class.
 
         \param create_context_info The context creation information.
     */
-    Context::Context(SssrCreateContextInfo const& create_context_info)
+    Context::Context(FfxSssrCreateContextInfo const& create_context_info)
         : frame_index_(0u)
         , frame_count_before_reuse_(create_context_info.frameCountBeforeMemoryReuse)
         , logging_function_(create_context_info.pLoggingCallbacks ? create_context_info.pLoggingCallbacks->pfnLogging : nullptr)
         , logging_function_user_data_(create_context_info.pLoggingCallbacks ? create_context_info.pLoggingCallbacks->pUserData : nullptr)
-        , api_call_("sssrCreateContext")
+        , api_call_("ffxSssrCreateContext")
         , reflection_view_id_dispenser_(create_context_info.maxReflectionViewCount)
         , reflection_view_view_matrices_(create_context_info.maxReflectionViewCount)
         , reflection_view_projection_matrices_(create_context_info.maxReflectionViewCount)
     {
         // Create platform-specific context(s)
-#ifndef SSSR_NO_D3D12
-        if (create_context_info.pCreateContextInfoD3D12)
+#ifndef FFX_SSSR_NO_D3D12
+        if (create_context_info.pD3D12CreateContextInfo)
         {
-            if (!create_context_info.pCreateContextInfoD3D12->pDevice)
+            if (!create_context_info.pD3D12CreateContextInfo->pDevice)
             {
-                throw reflection_error(*this, SSSR_STATUS_INVALID_VALUE, "pDevice must not be nullptr, cannot create Direct3D12 context");
+                throw reflection_error(*this, FFX_SSSR_STATUS_INVALID_VALUE, "pDevice must not be nullptr, cannot create Direct3D12 context");
             }
             
             context_d3d12_ = std::make_unique<ContextD3D12>(*this, create_context_info);
         }
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -85,17 +85,17 @@ namespace sssr
                 reflection_view_view_matrices_.Erase(ID(object_id));
                 reflection_view_projection_matrices_.Erase(ID(object_id));
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
                 if (context_d3d12_)
                     context_d3d12_->reflection_views_.Erase(ID(object_id));
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
 
                 reflection_view_id_dispenser_.FreeId(object_id);
             }
             break;
         default:
             {
-                SSSR_ASSERT(0);   // should never happen
+                FFX_SSSR_ASSERT(0);   // should never happen
             }
             break;
         }
@@ -123,7 +123,7 @@ namespace sssr
             break;
         default:
             {
-                SSSR_ASSERT(0);   // should never happen
+                FFX_SSSR_ASSERT(0);   // should never happen
             }
             break;
         }
@@ -137,12 +137,12 @@ namespace sssr
         \param reflection_view_id The identifier of the reflection view object.
         \param create_reflection_view_info The reflection view creation information.
     */
-    void Context::CreateReflectionView(std::uint64_t reflection_view_id, SssrCreateReflectionViewInfo const& create_reflection_view_info)
+    void Context::CreateReflectionView(std::uint64_t reflection_view_id, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info)
     {
-#ifndef SSSR_NO_D3D12
-        if (context_d3d12_ && create_reflection_view_info.pCreateReflectionViewInfoD3D12)
+#ifndef FFX_SSSR_NO_D3D12
+        if (context_d3d12_ && create_reflection_view_info.pD3D12CreateReflectionViewInfo)
             context_d3d12_->CreateReflectionView(reflection_view_id, create_reflection_view_info);
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -151,14 +151,14 @@ namespace sssr
         \param reflection_view_id The identifier of the reflection view object.
         \param resolve_reflection_view_info The reflection view resolve information.
     */
-    void Context::ResolveReflectionView(std::uint64_t reflection_view_id, SssrResolveReflectionViewInfo const& resolve_reflection_view_info)
+    void Context::ResolveReflectionView(std::uint64_t reflection_view_id, FfxSssrResolveReflectionViewInfo const& resolve_reflection_view_info)
     {
-        SSSR_ASSERT(reflection_view_view_matrices_.At(ID(reflection_view_id)));   // not created properly?
-        SSSR_ASSERT(reflection_view_projection_matrices_.At(ID(reflection_view_id)));
+        FFX_SSSR_ASSERT(reflection_view_view_matrices_.At(ID(reflection_view_id)));   // not created properly?
+        FFX_SSSR_ASSERT(reflection_view_projection_matrices_.At(ID(reflection_view_id)));
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
         context_d3d12_->ResolveReflectionView(reflection_view_id, resolve_reflection_view_info);
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -169,12 +169,12 @@ namespace sssr
     */
     void Context::GetReflectionViewTileClassificationElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
         if (context_d3d12_)
             context_d3d12_->GetReflectionViewTileClassificationElapsedTime(reflection_view_id, elapsed_time);
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -185,12 +185,12 @@ namespace sssr
     */
     void Context::GetReflectionViewIntersectionElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
         if (context_d3d12_)
             context_d3d12_->GetReflectionViewIntersectionElapsedTime(reflection_view_id, elapsed_time);
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -201,11 +201,11 @@ namespace sssr
     */
     void Context::GetReflectionViewDenoisingElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
-#ifndef SSSR_NO_D3D12
+#ifndef FFX_SSSR_NO_D3D12
         if (context_d3d12_)
             context_d3d12_->GetReflectionViewDenoisingElapsedTime(reflection_view_id, elapsed_time);
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 }

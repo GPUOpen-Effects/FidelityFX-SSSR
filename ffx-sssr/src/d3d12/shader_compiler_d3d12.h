@@ -26,7 +26,7 @@ THE SOFTWARE.
 
 #include "macros.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class Context;
 
@@ -35,7 +35,7 @@ namespace sssr
     */
     class ShaderD3D12 : public D3D12_SHADER_BYTECODE
     {
-        SSSR_NON_COPYABLE(ShaderD3D12);
+        FFX_SSSR_NON_COPYABLE(ShaderD3D12);
 
     public:
         inline ShaderD3D12();
@@ -52,7 +52,7 @@ namespace sssr
     */
     class ShaderCompilerD3D12
     {
-        SSSR_NON_COPYABLE(ShaderCompilerD3D12);
+        FFX_SSSR_NON_COPYABLE(ShaderCompilerD3D12);
 
     public:
         ShaderCompilerD3D12(Context& context);

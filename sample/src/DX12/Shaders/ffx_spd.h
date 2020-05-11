@@ -1,7 +1,7 @@
 //_____________________________________________________________/\_______________________________________________________________
 //==============================================================================================================================
 //
-//                                         [DS] Downsampler 0.1
+//                                         [FFX SPD] Single Pass Downsampler 1.0
 //
 //==============================================================================================================================
 // LICENSE
@@ -36,13 +36,16 @@
 // INTEGRATION SUMMARY FOR GPU
 // ===========================
 
-// [SAMPLER] - if you want to use a sampler for loading the source image
+// [SAMPLER] - if you want to use a sampler with linear filtering for loading the source image
 // follow additionally the instructions marked with [SAMPLER]
-// this is recommended, as it's the more optimal path
+// add following define:
+// #SPD_LINEAR_SAMPLER
+// this is recommended, as using one sample() with linear filter to reduce 2x2 is faster
+// than 4x load() plus manual averaging
 
 // // Setup layout. Example below for VK_FORMAT_R16G16B16A16_SFLOAT.
 // // Note: If you use UNORM/SRGB format, you need to convert to linear space
-// // as this is not done automatically via this downsampler approach
+// // when using UAV load() and store()
 // // conversion to linear (load function): x*x
 // // conversion from linear (store function): sqrt()
 
@@ -57,16 +60,16 @@
 
 // // global atomic counter - MUST be initialized to 0
 // // GLSL:
-// layout(std430, set=0, binding=2) buffer perThreadgroup
+// layout(std430, set=0, binding=2) buffer globalAtomicBuffer
 // {
 //    uint counter;
 // } globalAtomic;
 // // HLSL:
-// struct perThreadgroup
+// struct globalAtomicBuffer
 // {
 //    uint counter;
 // };
-// [[vk::binding(2)]] RWStructuredBuffer<perThreadgroup> globalAtomic;
+// [[vk::binding(2)]] RWStructuredBuffer<globalAtomicBuffer> globalAtomic;
 
 // // [SAMPLER] add sampler
 // GLSL: layout(set=0, binding=3) uniform sampler srcSampler;
@@ -77,14 +80,14 @@
 // // [SAMPLER] when using sampler add inverse source image size
 // // GLSL:
 // layout(push_constant) uniform pushConstants {
-//	  uint mips; // needed to opt out earlier if mips are < 12
-//	  uint numWorkGroups; // number of total thread groups, so numWorkGroupsX * numWorkGroupsY * numWorkGroupsZ
-// } myPerMip;
+//    uint mips; // needed to opt out earlier if mips are < 12
+//    uint numWorkGroups; // number of total thread groups, so numWorkGroupsX * numWorkGroupsY * numWorkGroupsZ
+// } spdConstants;
 // // HLSL:
 // [[vk::push_constant]]
-// cbuffer myPerMip {
-//	uint mips;
-//	uint numWorkGroups;
+// cbuffer spdConstants {
+// uint mips;
+// uint numWorkGroups;
 // };
 
 // ...
@@ -122,7 +125,9 @@
 
 // // Define the fetch function(s) and the reduction function
 // // if non-power-of-2 textures, add border controls to the load and store functions
-// // to make sure the borders of the mip level look as you it
+// // to make sure the borders of the mip level look as you want it
+// // if you don't add border controls you'll read zeros past the border
+// // if you load with a sampler, this is obv. handled by your sampler :)
 // // this is also the place where you need to do color space transformation if needed
 // // E.g. if your texture format is SRGB/UNORM and you use the UAV load and store functions
 // // no automatic to/from linear conversions are happening
@@ -131,111 +136,97 @@
 // // conversion from linear (store function): sqrt()
 
 // // Load from source image
-// GLSL: AF4 DSLoadSourceImage(ASU2 p){return imageLoad(imgSrc, p);}
-// HLSL: AF4 DSLoadSourceImage(ASU2 tex){return imgSrc[tex];}
-// [SAMPLER] you can also use a sampler, but then you need to modify also
-// AF4 ReduceLoadSourceImage4(AU2 base) { ... } to
-// AF4 ReduceLoadSourceImage4(AU2 base)
-// {
-//   return DSLoadSourceImage(ASU2(base));
-// }
+// GLSL: AF4 SpdLoadSourceImage(ASU2 p){return imageLoad(imgSrc, p);}
+// HLSL: AF4 SpdLoadSourceImage(ASU2 tex){return imgSrc[tex];}
+// [SAMPLER] don't forget to add the define #SPD_LINEAR_SAMPLER :)
 // GLSL:
-// AF4 DSLoadSourceImage(ASU2 p){
-//	  AF2 textureCoord = p * invInputSize + invInputSize;
-//	  return texture(sampler2D(imgSrc, srcSampler), textureCoord);
-//	}
+// AF4 SpdLoadSourceImage(ASU2 p){
+//    AF2 textureCoord = p * invInputSize + invInputSize;
+//    return texture(sampler2D(imgSrc, srcSampler), textureCoord);
+// }
 // HLSL:
-// AF4 DSLoadSourceImage(ASU2 p){
-//	  AF2 textureCoord = p * invInputSize + invInputSize;
-//	  return imgSrc.SampleLevel(srcSampler, textureCoord, 0);
-//	}
+// AF4 SpdLoadSourceImage(ASU2 p){
+//    AF2 textureCoord = p * invInputSize + invInputSize;
+//    return imgSrc.SampleLevel(srcSampler, textureCoord, 0);
+// }
 
-// [SAMPLER] make sure the sampler matches your defined reduction function :)
-// [SAMPLER] if you can use a sampler, use one - it's the more optimal path
-
-// // DSLoad() takes a 32-bit signed integer 2D coordinate and loads color.
+// // SpdLoad() takes a 32-bit signed integer 2D coordinate and loads color.
 // // Loads the 5th mip level, each value is computed by a different thread group
 // // last thread group will access all its elements and compute the subsequent mips
-// GLSL: AF4 DSLoad(ASU2 p){return imageLoad(imgDst[5],p);}
-// HLSL: AF4 DSLoad(ASU2 tex){return imgDst[5][tex];}
+// GLSL: AF4 SpdLoad(ASU2 p){return imageLoad(imgDst[5],p);}
+// HLSL: AF4 SpdLoad(ASU2 tex){return imgDst[5][tex];}
 
 // Define the store function
-// GLSL: void DSStore(ASU2 p, AF4 value, AU1 mip){imageStore(imgDst[mip], p, value);}
-// HLSL: void DSStore(ASU2 pix, AF4 value, AU1 index){imgDst[index][pix] = value;}
+// GLSL: void SpdStore(ASU2 p, AF4 value, AU1 mip){imageStore(imgDst[mip], p, value);}
+// HLSL: void SpdStore(ASU2 pix, AF4 value, AU1 index){imgDst[index][pix] = value;}
 
 // // Define the atomic counter increase function
 // // GLSL:
-// void DSIncreaseAtomicCounter(){spd_counter = atomicAdd(globalAtomic.counter, 1);}
-// AU1 DSGetAtomicCounter() {return spd_counter;}
+// void SpdIncreaseAtomicCounter(){spd_counter = atomicAdd(globalAtomic.counter, 1);}
+// AU1 SpdGetAtomicCounter() {return spd_counter;}
 // // HLSL:
-// void DSIncreaseAtomicCounter(){InterlockedAdd(globalAtomic[0].counter, 1, spd_counter);}
-// AU1 DSGetAtomicCounter(){return spd_counter;}
+// void SpdIncreaseAtomicCounter(){InterlockedAdd(globalAtomic[0].counter, 1, spd_counter);}
+// AU1 SpdGetAtomicCounter(){return spd_counter;}
 
-// // Define the lds load and store functions
+// // Define the LDS load and store functions
 // // GLSL:
-// AF4 DSLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
-// void DSStoreIntermediate(AU1 x, AU1 y, AF4 value){spd_intermediate[x][y] = value;}
+// AF4 SpdLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
+// void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value){spd_intermediate[x][y] = value;}
 // // HLSL:
-// AF4 DSLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
-// void DSStoreIntermediate(AU1 x, AU1 y, AF4 value){spd_intermediate[x][y] = value;}
+// AF4 SpdLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
+// void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value){spd_intermediate[x][y] = value;}
 
 // // Define your reduction function: takes as input the four 2x2 values and returns 1 output value
 // Example below: computes the average value
-// AF4 DSReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3){return (v0+v1+v2+v3)*0.25;}
+// AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3){return (v0+v1+v2+v3)*0.25;}
 
 // // PACKED VERSION
 // Load from source image
-// GLSL: AH4 DSLoadSourceImageH(ASU2 p){return AH4(imageLoad(imgSrc, p));}
-// HLSL: AH4 DSLoadSourceImageH(ASU2 tex){return AH4(imgSrc[tex]);}
-// [SAMPLER] you can also use a sampler, but then you need to modify also
-// AH4 ReduceLoadSourceImage4H(AU2 base) { ... } to
-// AH4 ReduceLoadSourceImage4H(AU2 base)
-// {
-//   return DSLoadSourceImageH(ASU2(base));
-// }
+// GLSL: AH4 SpdLoadSourceImageH(ASU2 p){return AH4(imageLoad(imgSrc, p));}
+// HLSL: AH4 SpdLoadSourceImageH(ASU2 tex){return AH4(imgSrc[tex]);}
+// [SAMPLER]
 // GLSL:
-// AH4 DSLoadSourceImageH(ASU2 p){
-//	  AF2 textureCoord = p * invInputSize + invInputSize;
-//	  return AH4(texture(sampler2D(imgSrc, srcSampler), textureCoord));
-//	}
+// AH4 SpdLoadSourceImageH(ASU2 p){
+//    AF2 textureCoord = p * invInputSize + invInputSize;
+//    return AH4(texture(sampler2D(imgSrc, srcSampler), textureCoord));
+// }
 // HLSL:
-// AH4 DSLoadSourceImageH(ASU2 p){
-//	  AF2 textureCoord = p * invInputSize + invInputSize;
-//	  return AH4(imgSrc.SampleLevel(srcSampler, textureCoord, 0));
-//	}
+// AH4 SpdLoadSourceImageH(ASU2 p){
+//    AF2 textureCoord = p * invInputSize + invInputSize;
+//    return AH4(imgSrc.SampleLevel(srcSampler, textureCoord, 0));
+// }
 
-// [SAMPLER] make sure the sampler matches your defined reduction function :)
-// [SAMPLER] if you can use a sampler, use one - it's the more optimal path
-
-// // DSLoadH() takes a 32-bit signed integer 2D coordinate and loads color.
+// // SpdLoadH() takes a 32-bit signed integer 2D coordinate and loads color.
 // // Loads the 5th mip level, each value is computed by a different thread group
 // // last thread group will access all its elements and compute the subsequent mips
-// GLSL: AH4 DSLoadH(ASU2 p){return AH4(imageLoad(imgDst[5],p));}
-// HLSL: AH4 DSLoadH(ASU2 tex){return AH4(imgDst[5][tex]);}
+// GLSL: AH4 SpdLoadH(ASU2 p){return AH4(imageLoad(imgDst[5],p));}
+// HLSL: AH4 SpdLoadH(ASU2 tex){return AH4(imgDst[5][tex]);}
 
 // Define the store function
-// GLSL: void DSStoreH(ASU2 p, AH4 value, AU1 mip){imageStore(imgDst[mip], p, AF4(value));}
-// HLSL: void DSStoreH(ASU2 pix, AH4 value, AU1 index){imgDst[index][pix] = AF4(value);}
+// GLSL: void SpdStoreH(ASU2 p, AH4 value, AU1 mip){imageStore(imgDst[mip], p, AF4(value));}
+// HLSL: void SpdStoreH(ASU2 pix, AH4 value, AU1 index){imgDst[index][pix] = AF4(value);}
 
 // // Define the atomic counter increase function
 // // GLSL:
-// void DSIncreaseAtomicCounter(){spd_counter = atomicAdd(globalAtomic.counter, 1);}
-// AU1 DSGetAtomicCounter() {return spd_counter;}
+// void SpdIncreaseAtomicCounter(){spd_counter = atomicAdd(globalAtomic.counter, 1);}
+// AU1 SpdGetAtomicCounter() {return spd_counter;}
 // // HLSL:
-// void DSIncreaseAtomicCounter(){InterlockedAdd(globalAtomic[0].counter, 1, spd_counter);}
-// AU1 DSGetAtomicCounter(){return spd_counter;}
+// void SpdIncreaseAtomicCounter(){InterlockedAdd(globalAtomic[0].counter, 1, spd_counter);}
+// AU1 SpdGetAtomicCounter(){return spd_counter;}
 
 // // Define the lds load and store functions
 // // GLSL:
-// AH4 DSLoadIntermediateH(AU1 x, AU1 y){return spd_intermediate[x][y];}
-// void DSStoreIntermediateH(AU1 x, AU1 y, AH4 value){spd_intermediate[x][y] = value;}
+// AH4 SpdLoadIntermediateH(AU1 x, AU1 y){return spd_intermediate[x][y];}
+// void SpdStoreIntermediateH(AU1 x, AU1 y, AH4 value){spd_intermediate[x][y] = value;}
 // // HLSL:
-// AH4 DSLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
-// void DSStoreIntermediate(AU1 x, AU1 y, AH4 value){spd_intermediate[x][y] = value;}
+// AH4 SpdLoadIntermediate(AU1 x, AU1 y){return spd_intermediate[x][y];}
+// void SpdStoreIntermediate(AU1 x, AU1 y, AH4 value){spd_intermediate[x][y] = value;}
 
 // // Define your reduction function: takes as input the four 2x2 values and returns 1 output value
 // Example below: computes the average value
-// AH4 DSReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3){return (v0+v1+v2+v3)*AH1(0.25);}
+// AH4 SpdReduce4H(AH4 v0, AH4 v1, AH4 v2, AH4 v3){return (v0+v1+v2+v3)*AH1(0.25);}
+
+// //
 
 // // If you only use PACKED version
 // #define SPD_PACKED_ONLY
@@ -249,22 +240,22 @@
 // layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 // void main(){
 //  // Call the downsampling function
-//  Downsample(AU2(gl_WorkGroupID.xy), AU1(gl_LocalInvocationIndex), 
-//  AU1(myPerMip.mips), AU1(myPerMip.numWorkGroups));
+//  SpdDownsample(AU2(gl_WorkGroupID.xy), AU1(gl_LocalInvocationIndex), 
+//    AU1(spdConstants.mips), AU1(spdConstants.numWorkGroups));
 //
 // // PACKED:
-// DownsampleH(AU2(gl_WorkGroupID.xy), AU1(gl_LocalInvocationIndex), 
-//		AU1(myPerMip.mips), AU1(myPerMip.numWorkGroups));
+//  SpdDownsampleH(AU2(gl_WorkGroupID.xy), AU1(gl_LocalInvocationIndex), 
+//    AU1(spdConstants.mips), AU1(spdConstants.numWorkGroups));
 // ...
 // // HLSL:
 // [numthreads(256,1,1)]
 // void main(uint3 WorkGroupId : SV_GroupID, uint LocalThreadIndex : SV_GroupIndex) {
-//    Downsample(AU2(WorkGroupId.xy), AU1(LocalThreadIndex),  
-//		AU1(mips), AU1(numWorkGroups));
+//  SpdDownsample(AU2(WorkGroupId.xy), AU1(LocalThreadIndex),  
+//    AU1(mips), AU1(numWorkGroups));
 //
 // // PACKED:
-// DownsampleH(AU2(WorkGroupId.xy), AU1(LocalThreadIndex),  
-//		AU1(mips), AU1(numWorkGroups));
+//  SpdDownsampleH(AU2(WorkGroupId.xy), AU1(LocalThreadIndex),  
+//    AU1(mips), AU1(numWorkGroups));
 // ...
 
 //
@@ -278,20 +269,20 @@
 
 #ifdef SPD_PACKED_ONLY
   // Avoid compiler error
-  AF4 DSLoadSourceImage(ASU2 p){return AF4(0.0,0.0,0.0,0.0);}
-  AF4 DSLoad(ASU2 p){return AF4(0.0,0.0,0.0,0.0);}
-  void DSStore(ASU2 p, AF4 value, AU1 mip){}
-  AF4 DSLoadIntermediate(AU1 x, AU1 y){return AF4(0.0,0.0,0.0,0.0);}
-  void DSStoreIntermediate(AU1 x, AU1 y, AF4 value){}
-  AF4 DSReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3){return AF4(0.0,0.0,0.0,0.0);}
+AF4 SpdLoadSourceImage(ASU2 p) { return AF4(0.0, 0.0, 0.0, 0.0); }
+AF4 SpdLoad(ASU2 p) { return AF4(0.0, 0.0, 0.0, 0.0); }
+void SpdStore(ASU2 p, AF4 value, AU1 mip) {}
+AF4 SpdLoadIntermediate(AU1 x, AU1 y) { return AF4(0.0, 0.0, 0.0, 0.0); }
+void SpdStoreIntermediate(AU1 x, AU1 y, AF4 value) {}
+AF4 SpdReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3) { return AF4(0.0, 0.0, 0.0, 0.0); }
 #endif
 
 //_____________________________________________________________/\_______________________________________________________________
 #if defined(A_GLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
-#extension GL_KHR_shader_subgroup_quad:require
+#extension GL_KHR_shader_subgroup_quad : require
 #endif
 
-void DSWorkgroupShuffleBarrier() {
+void SpdWorkgroupShuffleBarrier() {
 #ifdef A_GLSL
     barrier();
 #endif 
@@ -301,15 +292,15 @@ void DSWorkgroupShuffleBarrier() {
 }
 
 // Only last active workgroup should proceed
-bool DSExitWorkgroup(AU1 numWorkGroups, AU1 localInvocationIndex) 
+bool SpdExitWorkgroup(AU1 numWorkGroups, AU1 localInvocationIndex)
 {
     // global atomic counter
     if (localInvocationIndex == 0)
     {
-        DSIncreaseAtomicCounter();
+        SpdIncreaseAtomicCounter();
     }
-    DSWorkgroupShuffleBarrier();
-    return (DSGetAtomicCounter() != (numWorkGroups - 1));
+    SpdWorkgroupShuffleBarrier();
+    return (SpdGetAtomicCounter() != (numWorkGroups - 1));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -317,22 +308,22 @@ bool DSExitWorkgroup(AU1 numWorkGroups, AU1 localInvocationIndex)
 
 // User defined: AF4 DSReduce4(AF4 v0, AF4 v1, AF4 v2, AF4 v3);
 
-AF4 ReduceQuad(AF4 v)
+AF4 SpdReduceQuad(AF4 v)
 {
-    #if defined(A_GLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
+#if defined(A_GLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
     AF4 v0 = v;
     AF4 v1 = subgroupQuadSwapHorizontal(v);
     AF4 v2 = subgroupQuadSwapVertical(v);
     AF4 v3 = subgroupQuadSwapDiagonal(v);
-    return DSReduce4(v0, v1, v2, v3);
-    #elif defined(A_HLSL)
+    return SpdReduce4(v0, v1, v2, v3);
+#elif defined(A_HLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
     // requires SM6.0
     AU1 quad = WaveGetLaneIndex() &  (~0x3);
     AF4 v0 = v;
     AF4 v1 = WaveReadLaneAt(v, quad | 1);
     AF4 v2 = WaveReadLaneAt(v, quad | 2);
     AF4 v3 = WaveReadLaneAt(v, quad | 3);
-    return DSReduce4(v0, v1, v2, v3);
+    return SpdReduce4(v0, v1, v2, v3);
     /*
     // if SM6.0 is not available, you can use the AMD shader intrinsics
     // works for DX11
@@ -352,191 +343,192 @@ AF4 ReduceQuad(AF4 v)
     v3.y = AmdExtD3DShaderIntrinsics_SwizzleF(v.y, AmdExtD3DShaderIntrinsicsSwizzle_ReverseX4);
     v3.z = AmdExtD3DShaderIntrinsics_SwizzleF(v.z, AmdExtD3DShaderIntrinsicsSwizzle_ReverseX4);
     v3.w = AmdExtD3DShaderIntrinsics_SwizzleF(v.w, AmdExtD3DShaderIntrinsicsSwizzle_ReverseX4);
-    return DSReduce4(v0, v1, v2, v3);
+    return SpdReduce4(v0, v1, v2, v3);
     */
-    #endif
+#endif
     return AF4_x(0.0);
 }
 
-AF4 ReduceIntermediate(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
+AF4 SpdReduceIntermediate(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
 {
-    AF4 v0 = DSLoadIntermediate(i0.x, i0.y);
-    AF4 v1 = DSLoadIntermediate(i1.x, i1.y);
-    AF4 v2 = DSLoadIntermediate(i2.x, i2.y);
-    AF4 v3 = DSLoadIntermediate(i3.x, i3.y);
-    return DSReduce4(v0, v1, v2, v3);
+    AF4 v0 = SpdLoadIntermediate(i0.x, i0.y);
+    AF4 v1 = SpdLoadIntermediate(i1.x, i1.y);
+    AF4 v2 = SpdLoadIntermediate(i2.x, i2.y);
+    AF4 v3 = SpdLoadIntermediate(i3.x, i3.y);
+    return SpdReduce4(v0, v1, v2, v3);
 }
 
-AF4 ReduceLoad4(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
+AF4 SpdReduceLoad4(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
 {
-    AF4 v0 = DSLoad(ASU2(i0));
-    AF4 v1 = DSLoad(ASU2(i1));
-    AF4 v2 = DSLoad(ASU2(i2));
-    AF4 v3 = DSLoad(ASU2(i3));
-    return DSReduce4(v0, v1, v2, v3);
+    AF4 v0 = SpdLoad(ASU2(i0));
+    AF4 v1 = SpdLoad(ASU2(i1));
+    AF4 v2 = SpdLoad(ASU2(i2));
+    AF4 v3 = SpdLoad(ASU2(i3));
+    return SpdReduce4(v0, v1, v2, v3);
 }
 
-AF4 ReduceLoad4(AU2 base)
+AF4 SpdReduceLoad4(AU2 base)
 {
-    return ReduceLoad4(
+    return SpdReduceLoad4(
         AU2(base + AU2(0, 0)),
-        AU2(base + AU2(0, 1)), 
-        AU2(base + AU2(1, 0)), 
+        AU2(base + AU2(0, 1)),
+        AU2(base + AU2(1, 0)),
         AU2(base + AU2(1, 1)));
 }
 
-AF4 ReduceLoadSourceImage4(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
+AF4 SpdReduceLoadSourceImage4(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
 {
-    AF4 v0 = DSLoadSourceImage(ASU2(i0));
-    AF4 v1 = DSLoadSourceImage(ASU2(i1));
-    AF4 v2 = DSLoadSourceImage(ASU2(i2));
-    AF4 v3 = DSLoadSourceImage(ASU2(i3));
-    return DSReduce4(v0, v1, v2, v3);
+    AF4 v0 = SpdLoadSourceImage(ASU2(i0));
+    AF4 v1 = SpdLoadSourceImage(ASU2(i1));
+    AF4 v2 = SpdLoadSourceImage(ASU2(i2));
+    AF4 v3 = SpdLoadSourceImage(ASU2(i3));
+    return SpdReduce4(v0, v1, v2, v3);
 }
 
-AF4 ReduceLoadSourceImage4(AU2 base)
+AF4 SpdReduceLoadSourceImage4(AU2 base)
 {
-    // [SAMPLER] use:
-    return DSLoadSourceImage(ASU2(base));
-    // if no sampler use:
-    /*return ReduceLoadSourceImage4(
+#ifdef SPD_LINEAR_SAMPLER
+    return SpdLoadSourceImage(ASU2(base));
+#else
+    return SpdReduceLoadSourceImage4(
         AU2(base + AU2(0, 0)),
-        AU2(base + AU2(0, 1)), 
-        AU2(base + AU2(1, 0)), 
-        AU2(base + AU2(1, 1)));*/
+        AU2(base + AU2(0, 1)),
+        AU2(base + AU2(1, 0)),
+        AU2(base + AU2(1, 1)));
+#endif
 }
 
-void DownsampleMips_0_1_Intrinsics(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMips_0_1_Intrinsics(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
     AF4 v[4];
 
     ASU2 tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2);
     ASU2 pix = ASU2(workGroupID.xy * 32) + ASU2(x, y);
-    v[0] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[0], 0);
+    v[0] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[0], 0);
 
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y);
-    v[1] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[1], 0);
-    
+    v[1] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[1], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x, y + 16);
-    v[2] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[2], 0);
-    
+    v[2] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[2], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y + 16);
-    v[3] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[3], 0);
+    v[3] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[3], 0);
 
     if (mip <= 1)
         return;
 
-    v[0] = ReduceQuad(v[0]);
-    v[1] = ReduceQuad(v[1]);
-    v[2] = ReduceQuad(v[2]);
-    v[3] = ReduceQuad(v[3]);
+    v[0] = SpdReduceQuad(v[0]);
+    v[1] = SpdReduceQuad(v[1]);
+    v[2] = SpdReduceQuad(v[2]);
+    v[3] = SpdReduceQuad(v[3]);
 
     if ((localInvocationIndex % 4) == 0)
     {
-        DSStore(ASU2(workGroupID.xy * 16) + 
-            ASU2(x/2, y/2), v[0], 1);
-        DSStoreIntermediate(
-            x/2, y/2, v[0]);
+        SpdStore(ASU2(workGroupID.xy * 16) +
+            ASU2(x / 2, y / 2), v[0], 1);
+        SpdStoreIntermediate(
+            x / 2, y / 2, v[0]);
 
-        DSStore(ASU2(workGroupID.xy * 16) + 
-            ASU2(x/2 + 8, y/2), v[1], 1);
-        DSStoreIntermediate(
-            x/2 + 8, y/2, v[1]);
+        SpdStore(ASU2(workGroupID.xy * 16) +
+            ASU2(x / 2 + 8, y / 2), v[1], 1);
+        SpdStoreIntermediate(
+            x / 2 + 8, y / 2, v[1]);
 
-        DSStore(ASU2(workGroupID.xy * 16) + 
-            ASU2(x/2, y/2 + 8), v[2], 1);
-        DSStoreIntermediate(
-            x/2, y/2 + 8, v[2]);
+        SpdStore(ASU2(workGroupID.xy * 16) +
+            ASU2(x / 2, y / 2 + 8), v[2], 1);
+        SpdStoreIntermediate(
+            x / 2, y / 2 + 8, v[2]);
 
-        DSStore(ASU2(workGroupID.xy * 16) + 
-            ASU2(x/2 + 8, y/2 + 8), v[3], 1);
-        DSStoreIntermediate(
-            x/2 + 8, y/2 + 8, v[3]);
+        SpdStore(ASU2(workGroupID.xy * 16) +
+            ASU2(x / 2 + 8, y / 2 + 8), v[3], 1);
+        SpdStoreIntermediate(
+            x / 2 + 8, y / 2 + 8, v[3]);
     }
 }
 
-void DownsampleMips_0_1_LDS(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip) 
+void SpdDownsampleMips_0_1_LDS(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
     AF4 v[4];
 
     ASU2 tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2);
     ASU2 pix = ASU2(workGroupID.xy * 32) + ASU2(x, y);
-    v[0] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[0], 0);
+    v[0] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[0], 0);
 
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y);
-    v[1] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[1], 0);
-    
+    v[1] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[1], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x, y + 16);
-    v[2] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[2], 0);
-    
+    v[2] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[2], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y + 16);
-    v[3] = ReduceLoadSourceImage4(tex);
-    DSStore(pix, v[3], 0);
+    v[3] = SpdReduceLoadSourceImage4(tex);
+    SpdStore(pix, v[3], 0);
 
     if (mip <= 1)
         return;
 
     for (int i = 0; i < 4; i++)
     {
-        DSStoreIntermediate(x, y, v[i]);
-        DSWorkgroupShuffleBarrier();
+        SpdStoreIntermediate(x, y, v[i]);
+        SpdWorkgroupShuffleBarrier();
         if (localInvocationIndex < 64)
         {
-            v[i] = ReduceIntermediate(
+            v[i] = SpdReduceIntermediate(
                 AU2(x * 2 + 0, y * 2 + 0),
                 AU2(x * 2 + 1, y * 2 + 0),
                 AU2(x * 2 + 0, y * 2 + 1),
                 AU2(x * 2 + 1, y * 2 + 1)
             );
-            DSStore(ASU2(workGroupID.xy * 16) + ASU2(x + (i % 2) * 8, y + (i / 2) * 8), v[i], 1);
+            SpdStore(ASU2(workGroupID.xy * 16) + ASU2(x + (i % 2) * 8, y + (i / 2) * 8), v[i], 1);
         }
-        DSWorkgroupShuffleBarrier();
+        SpdWorkgroupShuffleBarrier();
     }
 
     if (localInvocationIndex < 64)
     {
-        DSStoreIntermediate(x + 0, y + 0, v[0]);
-        DSStoreIntermediate(x + 8, y + 0, v[1]);
-        DSStoreIntermediate(x + 0, y + 8, v[2]);
-        DSStoreIntermediate(x + 8, y + 8, v[3]);
+        SpdStoreIntermediate(x + 0, y + 0, v[0]);
+        SpdStoreIntermediate(x + 8, y + 0, v[1]);
+        SpdStoreIntermediate(x + 0, y + 8, v[2]);
+        SpdStoreIntermediate(x + 8, y + 8, v[3]);
     }
 }
 
-void DownsampleMips_0_1(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip) 
+void SpdDownsampleMips_0_1(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
-    DownsampleMips_0_1_LDS(x, y, workGroupID, localInvocationIndex, mip);
+    SpdDownsampleMips_0_1_LDS(x, y, workGroupID, localInvocationIndex, mip);
 #else
-    DownsampleMips_0_1_Intrinsics(x, y, workGroupID, localInvocationIndex, mip);
+    SpdDownsampleMips_0_1_Intrinsics(x, y, workGroupID, localInvocationIndex, mip);
 #endif
 }
 
 
-void DownsampleMip_2(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_2(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 64)
     {
-        AF4 v = ReduceIntermediate(
+        AF4 v = SpdReduceIntermediate(
             AU2(x * 2 + 0 + 0, y * 2 + 0),
             AU2(x * 2 + 0 + 1, y * 2 + 0),
             AU2(x * 2 + 0 + 0, y * 2 + 1),
             AU2(x * 2 + 0 + 1, y * 2 + 1)
         );
-        DSStore(ASU2(workGroupID.xy * 8) + ASU2(x, y), v, mip);
+        SpdStore(ASU2(workGroupID.xy * 8) + ASU2(x, y), v, mip);
         // store to LDS, try to reduce bank conflicts
         // x 0 x 0 x 0 x 0 x 0 x 0 x 0 x 0
         // 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
@@ -545,21 +537,21 @@ void DownsampleMip_2(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU
         // x 0 x 0 x 0 x 0 x 0 x 0 x 0 x 0
         // ...
         // x 0 x 0 x 0 x 0 x 0 x 0 x 0 x 0
-        DSStoreIntermediate(x * 2 + y % 2, y * 2, v);
+        SpdStoreIntermediate(x * 2 + y % 2, y * 2, v);
     }
 #else
-    AF4 v = DSLoadIntermediate(x, y);
-    v = ReduceQuad(v);
+    AF4 v = SpdLoadIntermediate(x, y);
+    v = SpdReduceQuad(v);
     // quad index 0 stores result
     if (localInvocationIndex % 4 == 0)
-    {   
-        DSStore(ASU2(workGroupID.xy * 8) + ASU2(x/2, y/2), v, mip);
-        DSStoreIntermediate(x + (y/2) % 2, y, v);
+    {
+        SpdStore(ASU2(workGroupID.xy * 8) + ASU2(x / 2, y / 2), v, mip);
+        SpdStoreIntermediate(x + (y / 2) % 2, y, v);
     }
 #endif
 }
 
-void DownsampleMip_3(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_3(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 16)
@@ -568,13 +560,13 @@ void DownsampleMip_3(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU
         // 0 0 0 0
         // 0 x 0 x
         // 0 0 0 0
-        AF4 v = ReduceIntermediate(
+        AF4 v = SpdReduceIntermediate(
             AU2(x * 4 + 0 + 0, y * 4 + 0),
             AU2(x * 4 + 2 + 0, y * 4 + 0),
             AU2(x * 4 + 0 + 1, y * 4 + 2),
             AU2(x * 4 + 2 + 1, y * 4 + 2)
         );
-        DSStore(ASU2(workGroupID.xy * 4) + ASU2(x, y), v, mip);
+        SpdStore(ASU2(workGroupID.xy * 4) + ASU2(x, y), v, mip);
         // store to LDS
         // x 0 0 0 x 0 0 0 x 0 0 0 x 0 0 0
         // 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
@@ -586,24 +578,24 @@ void DownsampleMip_3(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU
         // ...
         // 0 0 0 x 0 0 0 x 0 0 0 x 0 0 0 x
         // ...
-        DSStoreIntermediate(x * 4 + y, y * 4, v);
+        SpdStoreIntermediate(x * 4 + y, y * 4, v);
     }
 #else
     if (localInvocationIndex < 64)
     {
-        AF4 v = DSLoadIntermediate(x * 2 + y % 2,y * 2);
-        v = ReduceQuad(v);
+        AF4 v = SpdLoadIntermediate(x * 2 + y % 2, y * 2);
+        v = SpdReduceQuad(v);
         // quad index 0 stores result
         if (localInvocationIndex % 4 == 0)
-        {   
-            DSStore(ASU2(workGroupID.xy * 4) + ASU2(x/2, y/2), v, mip);
-            DSStoreIntermediate(x * 2 + y/2, y * 2, v);
+        {
+            SpdStore(ASU2(workGroupID.xy * 4) + ASU2(x / 2, y / 2), v, mip);
+            SpdStoreIntermediate(x * 2 + y / 2, y * 2, v);
         }
     }
 #endif
 }
 
-void DownsampleMip_4(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_4(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 4)
@@ -611,112 +603,112 @@ void DownsampleMip_4(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU
         // x 0 0 0 x 0 0 0
         // ...
         // 0 x 0 0 0 x 0 0
-        AF4 v = ReduceIntermediate(
+        AF4 v = SpdReduceIntermediate(
             AU2(x * 8 + 0 + 0 + y * 2, y * 8 + 0),
             AU2(x * 8 + 4 + 0 + y * 2, y * 8 + 0),
             AU2(x * 8 + 0 + 1 + y * 2, y * 8 + 4),
             AU2(x * 8 + 4 + 1 + y * 2, y * 8 + 4)
         );
-        DSStore(ASU2(workGroupID.xy * 2) + ASU2(x, y), v, mip);
+        SpdStore(ASU2(workGroupID.xy * 2) + ASU2(x, y), v, mip);
         // store to LDS
         // x x x x 0 ...
         // 0 ...
-        DSStoreIntermediate(x + y * 2, 0, v);
+        SpdStoreIntermediate(x + y * 2, 0, v);
     }
 #else
     if (localInvocationIndex < 16)
     {
-        AF4 v = DSLoadIntermediate(x * 4 + y,y * 4);
-        v = ReduceQuad(v);
+        AF4 v = SpdLoadIntermediate(x * 4 + y, y * 4);
+        v = SpdReduceQuad(v);
         // quad index 0 stores result
         if (localInvocationIndex % 4 == 0)
-        {   
-            DSStore(ASU2(workGroupID.xy * 2) + ASU2(x/2, y/2), v, mip);
-            DSStoreIntermediate(x / 2 + y, 0, v);
+        {
+            SpdStore(ASU2(workGroupID.xy * 2) + ASU2(x / 2, y / 2), v, mip);
+            SpdStoreIntermediate(x / 2 + y, 0, v);
         }
     }
 #endif
 }
 
-void DownsampleMip_5(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_5(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 1)
     {
         // x x x x 0 ...
         // 0 ...
-        AF4 v = ReduceIntermediate(
+        AF4 v = SpdReduceIntermediate(
             AU2(0, 0),
             AU2(1, 0),
             AU2(2, 0),
             AU2(3, 0)
         );
-        DSStore(ASU2(workGroupID.xy), v, mip);
+        SpdStore(ASU2(workGroupID.xy), v, mip);
     }
 #else
     if (localInvocationIndex < 4)
     {
-        AF4 v = DSLoadIntermediate(localInvocationIndex,0);
-        v = ReduceQuad(v);
+        AF4 v = SpdLoadIntermediate(localInvocationIndex, 0);
+        v = SpdReduceQuad(v);
         // quad index 0 stores result
         if (localInvocationIndex % 4 == 0)
-        {   
-            DSStore(ASU2(workGroupID.xy), v, mip);
+        {
+            SpdStore(ASU2(workGroupID.xy), v, mip);
         }
     }
 #endif
 }
 
-void DownsampleMips_6_7(AU1 x, AU1 y, AU1 mips)
+void SpdDownsampleMips_6_7(AU1 x, AU1 y, AU1 mips)
 {
     ASU2 tex = ASU2(x * 4 + 0, y * 4 + 0);
     ASU2 pix = ASU2(x * 2 + 0, y * 2 + 0);
-    AF4 v0 = ReduceLoad4(tex);
-    DSStore(pix, v0, 6);
+    AF4 v0 = SpdReduceLoad4(tex);
+    SpdStore(pix, v0, 6);
 
     tex = ASU2(x * 4 + 2, y * 4 + 0);
     pix = ASU2(x * 2 + 1, y * 2 + 0);
-    AF4 v1 = ReduceLoad4(tex);
-    DSStore(pix, v1, 6);
+    AF4 v1 = SpdReduceLoad4(tex);
+    SpdStore(pix, v1, 6);
 
     tex = ASU2(x * 4 + 0, y * 4 + 2);
     pix = ASU2(x * 2 + 0, y * 2 + 1);
-    AF4 v2 = ReduceLoad4(tex);
-    DSStore(pix, v2, 6);
+    AF4 v2 = SpdReduceLoad4(tex);
+    SpdStore(pix, v2, 6);
 
     tex = ASU2(x * 4 + 2, y * 4 + 2);
     pix = ASU2(x * 2 + 1, y * 2 + 1);
-    AF4 v3 = ReduceLoad4(tex);
-    DSStore(pix, v3, 6);
+    AF4 v3 = SpdReduceLoad4(tex);
+    SpdStore(pix, v3, 6);
 
     if (mips <= 7) return;
     // no barrier needed, working on values only from the same thread
 
-    AF4 v = DSReduce4(v0, v1, v2, v3);
-    DSStore(ASU2(x, y), v, 7);
-    DSStoreIntermediate(x, y, v);
+    AF4 v = SpdReduce4(v0, v1, v2, v3);
+    SpdStore(ASU2(x, y), v, 7);
+    SpdStoreIntermediate(x, y, v);
 }
 
-void DownsampleNextFour(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 baseMip, AU1 mips)
+void SpdDownsampleNextFour(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 baseMip, AU1 mips)
 {
     if (mips <= baseMip) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_2(x, y, workGroupID, localInvocationIndex, baseMip);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_2(x, y, workGroupID, localInvocationIndex, baseMip);
 
     if (mips <= baseMip + 1) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_3(x, y, workGroupID, localInvocationIndex, baseMip + 1);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_3(x, y, workGroupID, localInvocationIndex, baseMip + 1);
 
     if (mips <= baseMip + 2) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_4(x, y, workGroupID, localInvocationIndex, baseMip + 2);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_4(x, y, workGroupID, localInvocationIndex, baseMip + 2);
 
     if (mips <= baseMip + 3) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_5(x, y, workGroupID, localInvocationIndex, baseMip + 3);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_5(x, y, workGroupID, localInvocationIndex, baseMip + 3);
 }
 
-void Downsample(
+void SpdDownsample(
     AU2 workGroupID,
     AU1 localInvocationIndex,
     AU1 mips,
@@ -725,18 +717,18 @@ void Downsample(
     AU2 sub_xy = ARmpRed8x8(localInvocationIndex % 64);
     AU1 x = sub_xy.x + 8 * ((localInvocationIndex >> 6) % 2);
     AU1 y = sub_xy.y + 8 * ((localInvocationIndex >> 7));
-    DownsampleMips_0_1(x, y, workGroupID, localInvocationIndex, mips);
+    SpdDownsampleMips_0_1(x, y, workGroupID, localInvocationIndex, mips);
 
-    DownsampleNextFour(x, y, workGroupID, localInvocationIndex, 2, mips);
+    SpdDownsampleNextFour(x, y, workGroupID, localInvocationIndex, 2, mips);
 
     if (mips <= 6) return;
 
-    if (DSExitWorkgroup(numWorkGroups, localInvocationIndex)) return;
+    if (SpdExitWorkgroup(numWorkGroups, localInvocationIndex)) return;
 
     // After mip 6 there is only a single workgroup left that downsamples the remaining up to 64x64 texels.
-    DownsampleMips_6_7(x, y, mips);
+    SpdDownsampleMips_6_7(x, y, mips);
 
-    DownsampleNextFour(x, y, AU2(0,0), localInvocationIndex, 8, mips);
+    SpdDownsampleNextFour(x, y, AU2(0, 0), localInvocationIndex, 8, mips);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -749,25 +741,25 @@ void Downsample(
 #ifdef A_HALF // A_HALF
 
 #ifdef A_GLSL
-#extension GL_EXT_shader_subgroup_extended_types_float16:require
+#extension GL_EXT_shader_subgroup_extended_types_float16 : require
 #endif
 
-AH4 ReduceQuadH(AH4 v)
+AH4 SpdReduceQuadH(AH4 v)
 {
-    #if defined(A_GLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
+#if defined(A_GLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
     AH4 v0 = v;
     AH4 v1 = subgroupQuadSwapHorizontal(v);
     AH4 v2 = subgroupQuadSwapVertical(v);
     AH4 v3 = subgroupQuadSwapDiagonal(v);
-    return DSReduce4H(v0, v1, v2, v3);
-    #elif defined(A_HLSL)
+    return SpdReduce4H(v0, v1, v2, v3);
+#elif defined(A_HLSL) && !defined(SPD_NO_WAVE_OPERATIONS)
     // requires SM6.0
     AU1 quad = WaveGetLaneIndex() &  (~0x3);
     AH4 v0 = v;
     AH4 v1 = WaveReadLaneAt(v, quad | 1);
     AH4 v2 = WaveReadLaneAt(v, quad | 2);
     AH4 v3 = WaveReadLaneAt(v, quad | 3);
-    return DSReduce4H(v0, v1, v2, v3);
+    return SpdReduce4H(v0, v1, v2, v3);
     /*
     // if SM6.0 is not available, you can use the AMD shader intrinsics
     // works for DX11
@@ -787,185 +779,185 @@ AH4 ReduceQuadH(AH4 v)
     v3.y = AmdExtD3DShaderIntrinsics_SwizzleF(v.y, AmdExtD3DShaderIntrinsicsSwizzle_ReverseX4);
     v3.z = AmdExtD3DShaderIntrinsics_SwizzleF(v.z, AmdExtD3DShaderIntrinsicsSwizzle_ReverseX4);
     v3.w = AmdExtD3DShaderIntrinsics_SwizzleF(v.w, AmdExtD3DShaderIntrinsicsSwizzle_ReverseX4);
-    return DSReduce4H(v0, v1, v2, v3);
+    return SpdReduce4H(v0, v1, v2, v3);
     */
-    #endif
+#endif
     return AH4(0.0, 0.0, 0.0, 0.0);
 
 }
 
-AH4 ReduceIntermediateH(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
+AH4 SpdReduceIntermediateH(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
 {
-    AH4 v0 = DSLoadIntermediateH(i0.x, i0.y);
-    AH4 v1 = DSLoadIntermediateH(i1.x, i1.y);
-    AH4 v2 = DSLoadIntermediateH(i2.x, i2.y);
-    AH4 v3 = DSLoadIntermediateH(i3.x, i3.y);
-    return DSReduce4H(v0, v1, v2, v3);
+    AH4 v0 = SpdLoadIntermediateH(i0.x, i0.y);
+    AH4 v1 = SpdLoadIntermediateH(i1.x, i1.y);
+    AH4 v2 = SpdLoadIntermediateH(i2.x, i2.y);
+    AH4 v3 = SpdLoadIntermediateH(i3.x, i3.y);
+    return SpdReduce4H(v0, v1, v2, v3);
 }
 
-AH4 ReduceLoad4H(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
+AH4 SpdReduceLoad4H(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
 {
-    AH4 v0 = DSLoadH(ASU2(i0));
-    AH4 v1 = DSLoadH(ASU2(i1));
-    AH4 v2 = DSLoadH(ASU2(i2));
-    AH4 v3 = DSLoadH(ASU2(i3));
-    return DSReduce4H(v0, v1, v2, v3);
+    AH4 v0 = SpdLoadH(ASU2(i0));
+    AH4 v1 = SpdLoadH(ASU2(i1));
+    AH4 v2 = SpdLoadH(ASU2(i2));
+    AH4 v3 = SpdLoadH(ASU2(i3));
+    return SpdReduce4H(v0, v1, v2, v3);
 }
 
-AH4 ReduceLoad4H(AU2 base)
+AH4 SpdReduceLoad4H(AU2 base)
 {
-    return ReduceLoad4H(
+    return SpdReduceLoad4H(
         AU2(base + AU2(0, 0)),
-        AU2(base + AU2(0, 1)), 
-        AU2(base + AU2(1, 0)), 
+        AU2(base + AU2(0, 1)),
+        AU2(base + AU2(1, 0)),
         AU2(base + AU2(1, 1)));
 }
 
-AH4 ReduceLoadSourceImage4H(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
+AH4 SpdReduceLoadSourceImage4H(AU2 i0, AU2 i1, AU2 i2, AU2 i3)
 {
-    AH4 v0 = DSLoadSourceImageH(ASU2(i0));
-    AH4 v1 = DSLoadSourceImageH(ASU2(i1));
-    AH4 v2 = DSLoadSourceImageH(ASU2(i2));
-    AH4 v3 = DSLoadSourceImageH(ASU2(i3));
-    return DSReduce4H(v0, v1, v2, v3);
+    AH4 v0 = SpdLoadSourceImageH(ASU2(i0));
+    AH4 v1 = SpdLoadSourceImageH(ASU2(i1));
+    AH4 v2 = SpdLoadSourceImageH(ASU2(i2));
+    AH4 v3 = SpdLoadSourceImageH(ASU2(i3));
+    return SpdReduce4H(v0, v1, v2, v3);
 }
 
-AH4 ReduceLoadSourceImage4H(AU2 base)
+AH4 SpdReduceLoadSourceImage4H(AU2 base)
 {
-     // [SAMPLER] use:
-    return DSLoadSourceImageH(ASU2(base));
-    // if no sampler use:
-    /*return ReduceLoadSourceImage4H(
+#ifdef SPD_LINEAR_SAMPLER
+    return SpdLoadSourceImageH(ASU2(base));
+#else
+    return SpdReduceLoadSourceImage4H(
         AU2(base + AU2(0, 0)),
-        AU2(base + AU2(0, 1)), 
-        AU2(base + AU2(1, 0)), 
-        AU2(base + AU2(1, 1)));*/
-
+        AU2(base + AU2(0, 1)),
+        AU2(base + AU2(1, 0)),
+        AU2(base + AU2(1, 1)));
+#endif
 }
 
-void DownsampleMips_0_1_IntrinsicsH(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mips)
+void SpdDownsampleMips_0_1_IntrinsicsH(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mips)
 {
     AH4 v[4];
 
     ASU2 tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2);
     ASU2 pix = ASU2(workGroupID.xy * 32) + ASU2(x, y);
-    v[0] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[0], 0);
+    v[0] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[0], 0);
 
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y);
-    v[1] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[1], 0);
-    
+    v[1] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[1], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x, y + 16);
-    v[2] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[2], 0);
-    
+    v[2] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[2], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y + 16);
-    v[3] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[3], 0);
+    v[3] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[3], 0);
 
     if (mips <= 1)
         return;
 
-    v[0] = ReduceQuadH(v[0]);
-    v[1] = ReduceQuadH(v[1]);
-    v[2] = ReduceQuadH(v[2]);
-    v[3] = ReduceQuadH(v[3]);
+    v[0] = SpdReduceQuadH(v[0]);
+    v[1] = SpdReduceQuadH(v[1]);
+    v[2] = SpdReduceQuadH(v[2]);
+    v[3] = SpdReduceQuadH(v[3]);
 
     if ((localInvocationIndex % 4) == 0)
     {
-        DSStoreH(ASU2(workGroupID.xy * 16) + ASU2(x/2, y/2), v[0], 1);
-        DSStoreIntermediateH(x/2, y/2, v[0]);
+        SpdStoreH(ASU2(workGroupID.xy * 16) + ASU2(x / 2, y / 2), v[0], 1);
+        SpdStoreIntermediateH(x / 2, y / 2, v[0]);
 
-        DSStoreH(ASU2(workGroupID.xy * 16) + ASU2(x/2 + 8, y/2), v[1], 1);
-        DSStoreIntermediateH(x/2 + 8, y/2, v[1]);
+        SpdStoreH(ASU2(workGroupID.xy * 16) + ASU2(x / 2 + 8, y / 2), v[1], 1);
+        SpdStoreIntermediateH(x / 2 + 8, y / 2, v[1]);
 
-        DSStoreH(ASU2(workGroupID.xy * 16) + ASU2(x/2, y/2 + 8), v[2], 1);
-        DSStoreIntermediateH(x/2, y/2 + 8, v[2]);
+        SpdStoreH(ASU2(workGroupID.xy * 16) + ASU2(x / 2, y / 2 + 8), v[2], 1);
+        SpdStoreIntermediateH(x / 2, y / 2 + 8, v[2]);
 
-        DSStoreH(ASU2(workGroupID.xy * 16) + ASU2(x/2 + 8, y/2 + 8), v[3], 1);
-        DSStoreIntermediateH(x/2 + 8, y/2 + 8, v[3]);
+        SpdStoreH(ASU2(workGroupID.xy * 16) + ASU2(x / 2 + 8, y / 2 + 8), v[3], 1);
+        SpdStoreIntermediateH(x / 2 + 8, y / 2 + 8, v[3]);
     }
 }
 
-void DownsampleMips_0_1_LDSH(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mips) 
+void SpdDownsampleMips_0_1_LDSH(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mips)
 {
     AH4 v[4];
 
     ASU2 tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2);
     ASU2 pix = ASU2(workGroupID.xy * 32) + ASU2(x, y);
-    v[0] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[0], 0);
+    v[0] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[0], 0);
 
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y);
-    v[1] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[1], 0);
-    
+    v[1] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[1], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x, y + 16);
-    v[2] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[2], 0);
-    
+    v[2] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[2], 0);
+
     tex = ASU2(workGroupID.xy * 64) + ASU2(x * 2 + 32, y * 2 + 32);
     pix = ASU2(workGroupID.xy * 32) + ASU2(x + 16, y + 16);
-    v[3] = ReduceLoadSourceImage4H(tex);
-    DSStoreH(pix, v[3], 0);
+    v[3] = SpdReduceLoadSourceImage4H(tex);
+    SpdStoreH(pix, v[3], 0);
 
     if (mips <= 1)
         return;
 
     for (int i = 0; i < 4; i++)
     {
-        DSStoreIntermediateH(x, y, v[i]);
-        DSWorkgroupShuffleBarrier();
+        SpdStoreIntermediateH(x, y, v[i]);
+        SpdWorkgroupShuffleBarrier();
         if (localInvocationIndex < 64)
         {
-            v[i] = ReduceIntermediateH(
+            v[i] = SpdReduceIntermediateH(
                 AU2(x * 2 + 0, y * 2 + 0),
                 AU2(x * 2 + 1, y * 2 + 0),
                 AU2(x * 2 + 0, y * 2 + 1),
                 AU2(x * 2 + 1, y * 2 + 1)
             );
-            DSStoreH(ASU2(workGroupID.xy * 16) + ASU2(x + (i % 2) * 8, y + (i / 2) * 8), v[i], 1);
+            SpdStoreH(ASU2(workGroupID.xy * 16) + ASU2(x + (i % 2) * 8, y + (i / 2) * 8), v[i], 1);
         }
-        DSWorkgroupShuffleBarrier();
+        SpdWorkgroupShuffleBarrier();
     }
 
     if (localInvocationIndex < 64)
     {
-        DSStoreIntermediateH(x + 0, y + 0, v[0]);
-        DSStoreIntermediateH(x + 8, y + 0, v[1]);
-        DSStoreIntermediateH(x + 0, y + 8, v[2]);
-        DSStoreIntermediateH(x + 8, y + 8, v[3]);
+        SpdStoreIntermediateH(x + 0, y + 0, v[0]);
+        SpdStoreIntermediateH(x + 8, y + 0, v[1]);
+        SpdStoreIntermediateH(x + 0, y + 8, v[2]);
+        SpdStoreIntermediateH(x + 8, y + 8, v[3]);
     }
 }
 
-void DownsampleMips_0_1H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mips) 
+void SpdDownsampleMips_0_1H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mips)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
-    DownsampleMips_0_1_LDSH(x, y, workGroupID, localInvocationIndex, mips);
+    SpdDownsampleMips_0_1_LDSH(x, y, workGroupID, localInvocationIndex, mips);
 #else
-    DownsampleMips_0_1_IntrinsicsH(x, y, workGroupID, localInvocationIndex, mips);
+    SpdDownsampleMips_0_1_IntrinsicsH(x, y, workGroupID, localInvocationIndex, mips);
 #endif
 }
 
 
-void DownsampleMip_2H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_2H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 64)
     {
-        AH4 v = ReduceIntermediateH(
+        AH4 v = SpdReduceIntermediateH(
             AU2(x * 2 + 0 + 0, y * 2 + 0),
             AU2(x * 2 + 0 + 1, y * 2 + 0),
             AU2(x * 2 + 0 + 0, y * 2 + 1),
             AU2(x * 2 + 0 + 1, y * 2 + 1)
         );
-        DSStoreH(ASU2(workGroupID.xy * 8) + ASU2(x, y), v, mip);
+        SpdStoreH(ASU2(workGroupID.xy * 8) + ASU2(x, y), v, mip);
         // store to LDS, try to reduce bank conflicts
         // x 0 x 0 x 0 x 0 x 0 x 0 x 0 x 0
         // 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
@@ -974,21 +966,21 @@ void DownsampleMip_2H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, A
         // x 0 x 0 x 0 x 0 x 0 x 0 x 0 x 0
         // ...
         // x 0 x 0 x 0 x 0 x 0 x 0 x 0 x 0
-        DSStoreIntermediateH(x * 2 + y % 2, y * 2, v);
+        SpdStoreIntermediateH(x * 2 + y % 2, y * 2, v);
     }
 #else
-    AH4 v = DSLoadIntermediateH(x, y);
-    v = ReduceQuadH(v);
+    AH4 v = SpdLoadIntermediateH(x, y);
+    v = SpdReduceQuadH(v);
     // quad index 0 stores result
     if (localInvocationIndex % 4 == 0)
-    {   
-        DSStoreH(ASU2(workGroupID.xy * 8) + ASU2(x/2, y/2), v, mip);
-        DSStoreIntermediateH(x + (y/2) % 2, y, v);
+    {
+        SpdStoreH(ASU2(workGroupID.xy * 8) + ASU2(x / 2, y / 2), v, mip);
+        SpdStoreIntermediateH(x + (y / 2) % 2, y, v);
     }
 #endif
 }
 
-void DownsampleMip_3H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_3H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 16)
@@ -997,13 +989,13 @@ void DownsampleMip_3H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, A
         // 0 0 0 0
         // 0 x 0 x
         // 0 0 0 0
-        AH4 v = ReduceIntermediateH(
+        AH4 v = SpdReduceIntermediateH(
             AU2(x * 4 + 0 + 0, y * 4 + 0),
             AU2(x * 4 + 2 + 0, y * 4 + 0),
             AU2(x * 4 + 0 + 1, y * 4 + 2),
             AU2(x * 4 + 2 + 1, y * 4 + 2)
         );
-        DSStoreH(ASU2(workGroupID.xy * 4) + ASU2(x, y), v, mip);
+        SpdStoreH(ASU2(workGroupID.xy * 4) + ASU2(x, y), v, mip);
         // store to LDS
         // x 0 0 0 x 0 0 0 x 0 0 0 x 0 0 0
         // 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
@@ -1015,24 +1007,24 @@ void DownsampleMip_3H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, A
         // ...
         // 0 0 0 x 0 0 0 x 0 0 0 x 0 0 0 x
         // ...
-        DSStoreIntermediateH(x * 4 + y, y * 4, v);
+        SpdStoreIntermediateH(x * 4 + y, y * 4, v);
     }
 #else
     if (localInvocationIndex < 64)
     {
-        AH4 v = DSLoadIntermediateH(x * 2 + y % 2,y * 2);
-        v = ReduceQuadH(v);
+        AH4 v = SpdLoadIntermediateH(x * 2 + y % 2, y * 2);
+        v = SpdReduceQuadH(v);
         // quad index 0 stores result
         if (localInvocationIndex % 4 == 0)
-        {   
-            DSStoreH(ASU2(workGroupID.xy * 4) + ASU2(x/2, y/2), v, mip);
-            DSStoreIntermediateH(x * 2 + y/2, y * 2, v);
+        {
+            SpdStoreH(ASU2(workGroupID.xy * 4) + ASU2(x / 2, y / 2), v, mip);
+            SpdStoreIntermediateH(x * 2 + y / 2, y * 2, v);
         }
     }
 #endif
 }
 
-void DownsampleMip_4H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_4H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 4)
@@ -1040,112 +1032,112 @@ void DownsampleMip_4H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, A
         // x 0 0 0 x 0 0 0
         // ...
         // 0 x 0 0 0 x 0 0
-        AH4 v = ReduceIntermediateH(
+        AH4 v = SpdReduceIntermediateH(
             AU2(x * 8 + 0 + 0 + y * 2, y * 8 + 0),
             AU2(x * 8 + 4 + 0 + y * 2, y * 8 + 0),
             AU2(x * 8 + 0 + 1 + y * 2, y * 8 + 4),
             AU2(x * 8 + 4 + 1 + y * 2, y * 8 + 4)
         );
-        DSStoreH(ASU2(workGroupID.xy * 2) + ASU2(x, y), v, mip);
+        SpdStoreH(ASU2(workGroupID.xy * 2) + ASU2(x, y), v, mip);
         // store to LDS
         // x x x x 0 ...
         // 0 ...
-        DSStoreIntermediateH(x + y * 2, 0, v);
+        SpdStoreIntermediateH(x + y * 2, 0, v);
     }
 #else
     if (localInvocationIndex < 16)
     {
-        AH4 v = DSLoadIntermediateH(x * 4 + y,y * 4);
-        v = ReduceQuadH(v);
+        AH4 v = SpdLoadIntermediateH(x * 4 + y, y * 4);
+        v = SpdReduceQuadH(v);
         // quad index 0 stores result
         if (localInvocationIndex % 4 == 0)
-        {   
-            DSStoreH(ASU2(workGroupID.xy * 2) + ASU2(x/2, y/2), v, mip);
-            DSStoreIntermediateH(x / 2 + y, 0, v);
+        {
+            SpdStoreH(ASU2(workGroupID.xy * 2) + ASU2(x / 2, y / 2), v, mip);
+            SpdStoreIntermediateH(x / 2 + y, 0, v);
         }
     }
 #endif
 }
 
-void DownsampleMip_5H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
+void SpdDownsampleMip_5H(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 mip)
 {
 #ifdef SPD_NO_WAVE_OPERATIONS
     if (localInvocationIndex < 1)
     {
         // x x x x 0 ...
         // 0 ...
-        AH4 v = ReduceIntermediateH(
+        AH4 v = SpdReduceIntermediateH(
             AU2(0, 0),
             AU2(1, 0),
             AU2(2, 0),
             AU2(3, 0)
         );
-        DSStoreH(ASU2(workGroupID.xy), v, mip);
+        SpdStoreH(ASU2(workGroupID.xy), v, mip);
     }
 #else
     if (localInvocationIndex < 4)
     {
-        AH4 v = DSLoadIntermediateH(localInvocationIndex,0);
-        v = ReduceQuadH(v);
+        AH4 v = SpdLoadIntermediateH(localInvocationIndex, 0);
+        v = SpdReduceQuadH(v);
         // quad index 0 stores result
         if (localInvocationIndex % 4 == 0)
-        {   
-            DSStoreH(ASU2(workGroupID.xy), v, mip);
+        {
+            SpdStoreH(ASU2(workGroupID.xy), v, mip);
         }
     }
 #endif
 }
 
-void DownsampleMips_6_7H(AU1 x, AU1 y, AU1 mips)
+void SpdDownsampleMips_6_7H(AU1 x, AU1 y, AU1 mips)
 {
     ASU2 tex = ASU2(x * 4 + 0, y * 4 + 0);
     ASU2 pix = ASU2(x * 2 + 0, y * 2 + 0);
-    AH4 v0 = ReduceLoad4H(tex);
-    DSStoreH(pix, v0, 6);
+    AH4 v0 = SpdReduceLoad4H(tex);
+    SpdStoreH(pix, v0, 6);
 
     tex = ASU2(x * 4 + 2, y * 4 + 0);
     pix = ASU2(x * 2 + 1, y * 2 + 0);
-    AH4 v1 = ReduceLoad4H(tex);
-    DSStoreH(pix, v1, 6);
+    AH4 v1 = SpdReduceLoad4H(tex);
+    SpdStoreH(pix, v1, 6);
 
     tex = ASU2(x * 4 + 0, y * 4 + 2);
     pix = ASU2(x * 2 + 0, y * 2 + 1);
-    AH4 v2 = ReduceLoad4H(tex);
-    DSStoreH(pix, v2, 6);
+    AH4 v2 = SpdReduceLoad4H(tex);
+    SpdStoreH(pix, v2, 6);
 
     tex = ASU2(x * 4 + 2, y * 4 + 2);
     pix = ASU2(x * 2 + 1, y * 2 + 1);
-    AH4 v3 = ReduceLoad4H(tex);
-    DSStoreH(pix, v3, 6);
+    AH4 v3 = SpdReduceLoad4H(tex);
+    SpdStoreH(pix, v3, 6);
 
     if (mips < 8) return;
     // no barrier needed, working on values only from the same thread
 
-    AH4 v = DSReduce4H(v0, v1, v2, v3);
-    DSStoreH(ASU2(x, y), v, 7);
-    DSStoreIntermediateH(x, y, v);
+    AH4 v = SpdReduce4H(v0, v1, v2, v3);
+    SpdStoreH(ASU2(x, y), v, 7);
+    SpdStoreIntermediateH(x, y, v);
 }
 
-void DownsampleNextFourH(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 baseMip, AU1 mips)
+void SpdDownsampleNextFourH(AU1 x, AU1 y, AU2 workGroupID, AU1 localInvocationIndex, AU1 baseMip, AU1 mips)
 {
     if (mips <= baseMip) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_2H(x, y, workGroupID, localInvocationIndex, baseMip);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_2H(x, y, workGroupID, localInvocationIndex, baseMip);
 
     if (mips <= baseMip + 1) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_3H(x, y, workGroupID, localInvocationIndex, baseMip + 1);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_3H(x, y, workGroupID, localInvocationIndex, baseMip + 1);
 
     if (mips <= baseMip + 2) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_4H(x, y, workGroupID, localInvocationIndex, baseMip + 2);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_4H(x, y, workGroupID, localInvocationIndex, baseMip + 2);
 
     if (mips <= baseMip + 3) return;
-    DSWorkgroupShuffleBarrier();
-    DownsampleMip_5H(x, y, workGroupID, localInvocationIndex, baseMip + 3);
+    SpdWorkgroupShuffleBarrier();
+    SpdDownsampleMip_5H(x, y, workGroupID, localInvocationIndex, baseMip + 3);
 }
 
-void DownsampleH(
+void SpdDownsampleH(
     AU2 workGroupID,
     AU1 localInvocationIndex,
     AU1 mips,
@@ -1155,18 +1147,18 @@ void DownsampleH(
     AU1 x = sub_xy.x + 8 * ((localInvocationIndex >> 6) % 2);
     AU1 y = sub_xy.y + 8 * ((localInvocationIndex >> 7));
 
-    DownsampleMips_0_1H(x, y, workGroupID, localInvocationIndex, mips);
+    SpdDownsampleMips_0_1H(x, y, workGroupID, localInvocationIndex, mips);
 
-    DownsampleNextFourH(x, y, workGroupID, localInvocationIndex, 2, mips);
+    SpdDownsampleNextFourH(x, y, workGroupID, localInvocationIndex, 2, mips);
 
     if (mips < 7) return;
 
-    if (DSExitWorkgroup(numWorkGroups, localInvocationIndex)) return;
+    if (SpdExitWorkgroup(numWorkGroups, localInvocationIndex)) return;
 
     // After mip 6 there is only a single workgroup left that downsamples the remaining up to 64x64 texels.
-    DownsampleMips_6_7H(x, y, mips);
+    SpdDownsampleMips_6_7H(x, y, mips);
 
-    DownsampleNextFourH(x, y, AU2(0,0), localInvocationIndex, 8, mips);
+    SpdDownsampleNextFourH(x, y, AU2(0, 0), localInvocationIndex, 8, mips);
 }
 
 #endif

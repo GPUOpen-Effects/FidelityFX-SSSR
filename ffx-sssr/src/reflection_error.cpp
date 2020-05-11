@@ -23,13 +23,13 @@ THE SOFTWARE.
 
 #include "context.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the reflection_error class.
     */
     reflection_error::reflection_error()
-        : error_(SSSR_STATUS_INTERNAL_ERROR)
+        : error_(FFX_SSSR_STATUS_INTERNAL_ERROR)
     {
     }
 
@@ -38,7 +38,7 @@ namespace sssr
 
         \param error The error code for this exception.
     */
-    reflection_error::reflection_error(SssrStatus error)
+    reflection_error::reflection_error(FfxSssrStatus error)
         : error_(error)
     {
     }
@@ -49,7 +49,7 @@ namespace sssr
         \param context The context to be used.
         \param error The error code for this exception.
     */
-    reflection_error::reflection_error(Context& context, SssrStatus error)
+    reflection_error::reflection_error(Context& context, FfxSssrStatus error)
         : error_(error)
     {
         (void)&context;
@@ -63,7 +63,7 @@ namespace sssr
         \param format The format for the error message.
         \param ... The content of the error message.
     */
-    reflection_error::reflection_error(Context& context, SssrStatus error, char const* format, ...)
+    reflection_error::reflection_error(Context& context, FfxSssrStatus error, char const* format, ...)
         : error_(error)
     {
         va_list args;

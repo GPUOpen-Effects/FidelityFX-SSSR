@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         Creates a new reflection view.
@@ -33,7 +33,7 @@ namespace sssr
     {
         if (!CreateObject(object_id, kResourceType_ReflectionView, reflection_view_id_dispenser_))
         {
-            throw reflection_error(*this, SSSR_STATUS_OUT_OF_MEMORY, "Unable to create a new reflection view resource");
+            throw reflection_error(*this, FFX_SSSR_STATUS_OUT_OF_MEMORY, "Unable to create a new reflection view resource");
         }
 
         // Populate the default reflection view properties
@@ -111,7 +111,7 @@ namespace sssr
             return reflection_view_id_dispenser_.GetIdCount();
         default:
             {
-                SSSR_ASSERT(0);   // should never happen
+                FFX_SSSR_ASSERT(0);   // should never happen
             }
             break;
         }
@@ -133,7 +133,7 @@ namespace sssr
             return reflection_view_id_dispenser_.GetMaxIdCount();
         default:
             {
-                SSSR_ASSERT(0);   // should never happen
+                FFX_SSSR_ASSERT(0);   // should never happen
             }
             break;
         }
@@ -148,11 +148,11 @@ namespace sssr
     */
     ContextD3D12* Context::GetContextD3D12()
     {
-#ifdef SSSR_NO_D3D12
+#ifdef FFX_SSSR_NO_D3D12
         return nullptr;
-#else // SSSR_NO_D3D12
+#else // FFX_SSSR_NO_D3D12
         return context_d3d12_.get();
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -162,11 +162,11 @@ namespace sssr
     */
     ContextD3D12 const* Context::GetContextD3D12() const
     {
-#ifdef SSSR_NO_D3D12
+#ifdef FFX_SSSR_NO_D3D12
         return nullptr;
-#else // SSSR_NO_D3D12
+#else // FFX_SSSR_NO_D3D12
         return context_d3d12_.get();
-#endif // SSSR_NO_D3D12
+#endif // FFX_SSSR_NO_D3D12
     }
 
     /**
@@ -195,21 +195,21 @@ namespace sssr
         \param error The error code to be queried.
         \return The name corresponding to the error code.
     */
-    char const* Context::GetErrorName(SssrStatus error)
+    char const* Context::GetErrorName(FfxSssrStatus error)
     {
         switch (error)
         {
-        case SSSR_STATUS_OK:
+        case FFX_SSSR_STATUS_OK:
             return "OK";
-        case SSSR_STATUS_INVALID_VALUE:
+        case FFX_SSSR_STATUS_INVALID_VALUE:
             return "Invalid value";
-        case SSSR_STATUS_INVALID_OPERATION:
+        case FFX_SSSR_STATUS_INVALID_OPERATION:
             return "Invalid operation";
-        case SSSR_STATUS_OUT_OF_MEMORY:
+        case FFX_SSSR_STATUS_OUT_OF_MEMORY:
             return "Out of memory";
-        case SSSR_STATUS_INCOMPATIBLE_API:
+        case FFX_SSSR_STATUS_INCOMPATIBLE_API:
             return "Incompatible API";
-        case SSSR_STATUS_INTERNAL_ERROR:
+        case FFX_SSSR_STATUS_INTERNAL_ERROR:
             return "Internal error";
         default:
             break;
@@ -225,7 +225,7 @@ namespace sssr
         \param format The format for the error message.
         \param ... The content of the error message.
     */
-    void Context::Error(SssrStatus error, char const* format, ...)
+    void Context::Error(FfxSssrStatus error, char const* format, ...)
     {
         va_list args;
         va_start(args, format);
@@ -240,7 +240,7 @@ namespace sssr
         \param format The format for the error message.
         \param args The content of the error message.
     */
-    void Context::Error(SssrStatus error, char const* format, va_list args)
+    void Context::Error(FfxSssrStatus error, char const* format, va_list args)
     {
         char buffer[2048], message[2048];
 
@@ -268,11 +268,11 @@ namespace sssr
     */
     void Context::GetReflectionViewViewMatrix(std::uint64_t reflection_view_id, matrix4& view_matrix) const
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
         auto const reflection_view_view_matrix = reflection_view_view_matrices_.At(ID(reflection_view_id));
 
-        SSSR_ASSERT(reflection_view_view_matrix); // should never happen
+        FFX_SSSR_ASSERT(reflection_view_view_matrix); // should never happen
 
         view_matrix = *reflection_view_view_matrix;
     }
@@ -285,7 +285,7 @@ namespace sssr
     */
     void Context::SetReflectionViewViewMatrix(std::uint64_t reflection_view_id, matrix4 const& view_matrix)
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
         reflection_view_view_matrices_.Insert(ID(reflection_view_id), view_matrix);
     }
@@ -298,11 +298,11 @@ namespace sssr
     */
     void Context::GetReflectionViewProjectionMatrix(std::uint64_t reflection_view_id, matrix4& projection_matrix) const
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
         auto const reflection_view_projection_matrix = reflection_view_projection_matrices_.At(ID(reflection_view_id));
 
-        SSSR_ASSERT(reflection_view_projection_matrix);   // should never happen
+        FFX_SSSR_ASSERT(reflection_view_projection_matrix);   // should never happen
 
         projection_matrix = *reflection_view_projection_matrix;
     }
@@ -315,7 +315,7 @@ namespace sssr
     */
     void Context::SetReflectionViewProjectionMatrix(std::uint64_t reflection_view_id, matrix4 const& projection_matrix)
     {
-        SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
+        FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
         reflection_view_projection_matrices_.Insert(ID(reflection_view_id), projection_matrix);
     }
@@ -341,7 +341,7 @@ namespace sssr
     */
     void Context::SetResourceType(std::uint64_t& object_id, ResourceType resource_type)
     {
-        SSSR_ASSERT(resource_type < kResourceType_Count);
+        FFX_SSSR_ASSERT(resource_type < kResourceType_Count);
 
         object_id |= ((static_cast<std::uint64_t>(resource_type) + 1ull) << 48);
     }
@@ -356,7 +356,7 @@ namespace sssr
     */
     bool Context::CreateObject(std::uint64_t& object_id, ResourceType resource_type, IdDispenser& id_dispenser)
     {
-        SSSR_ASSERT(resource_type < kResourceType_Count);
+        FFX_SSSR_ASSERT(resource_type < kResourceType_Count);
 
         if (!id_dispenser.AllocateId(object_id))
         {

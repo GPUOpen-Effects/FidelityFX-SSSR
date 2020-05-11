@@ -22,7 +22,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The constructor for the ShaderKey class.
@@ -118,10 +118,10 @@ namespace sssr
     */
     ShaderD3D12 const& ContextD3D12::GetShader(Shader shader) const
     {
-        SSSR_ASSERT(shader < kShader_Count);
+        FFX_SSSR_ASSERT(shader < kShader_Count);
         ShaderKey const shader_key(shader, 0ull);
         auto const it = shaders_.find(shader_key);
-        SSSR_ASSERT(it != shaders_.end());
+        FFX_SSSR_ASSERT(it != shaders_.end());
         return (*it).second;
     }
 
@@ -132,9 +132,9 @@ namespace sssr
     */
     inline BlueNoiseSamplerD3D12 const & ContextD3D12::GetSampler1SPP() const
     {
-        SSSR_ASSERT(blue_noise_sampler_1spp_.sobol_buffer_);
-        SSSR_ASSERT(blue_noise_sampler_1spp_.ranking_tile_buffer_);
-        SSSR_ASSERT(blue_noise_sampler_1spp_.scrambling_tile_buffer_);
+        FFX_SSSR_ASSERT(blue_noise_sampler_1spp_.sobol_buffer_);
+        FFX_SSSR_ASSERT(blue_noise_sampler_1spp_.ranking_tile_buffer_);
+        FFX_SSSR_ASSERT(blue_noise_sampler_1spp_.scrambling_tile_buffer_);
         return blue_noise_sampler_1spp_;
     }
 
@@ -145,9 +145,9 @@ namespace sssr
     */
     inline BlueNoiseSamplerD3D12 const & ContextD3D12::GetSampler2SPP() const
     {
-        SSSR_ASSERT(blue_noise_sampler_2spp_.sobol_buffer_);
-        SSSR_ASSERT(blue_noise_sampler_2spp_.ranking_tile_buffer_);
-        SSSR_ASSERT(blue_noise_sampler_2spp_.scrambling_tile_buffer_);
+        FFX_SSSR_ASSERT(blue_noise_sampler_2spp_.sobol_buffer_);
+        FFX_SSSR_ASSERT(blue_noise_sampler_2spp_.ranking_tile_buffer_);
+        FFX_SSSR_ASSERT(blue_noise_sampler_2spp_.scrambling_tile_buffer_);
         return blue_noise_sampler_2spp_;
     }
 
@@ -161,16 +161,16 @@ namespace sssr
     ID3D12Device* ContextD3D12::GetValidDevice(Context& context, ID3D12Device* device)
     {
         if (!device)
-            throw reflection_error(context, SSSR_STATUS_INVALID_VALUE, "No device was supplied.");
+            throw reflection_error(context, FFX_SSSR_STATUS_INVALID_VALUE, "No device was supplied.");
         
         D3D12_FEATURE_DATA_SHADER_MODEL supportedShaderModel = {};
         supportedShaderModel.HighestShaderModel = D3D_SHADER_MODEL_6_2;
         HRESULT hr = device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &supportedShaderModel, sizeof(D3D12_FEATURE_DATA_SHADER_MODEL));
         if(!SUCCEEDED(hr))
-            throw reflection_error(context, SSSR_STATUS_INVALID_VALUE, "Unable to check for shader model support on provided device.");
+            throw reflection_error(context, FFX_SSSR_STATUS_INVALID_VALUE, "Unable to check for shader model support on provided device.");
 
         if(supportedShaderModel.HighestShaderModel < D3D_SHADER_MODEL_6_2)
-            throw reflection_error(context, SSSR_STATUS_INVALID_VALUE, "Device does not support shader model 6.2.");
+            throw reflection_error(context, FFX_SSSR_STATUS_INVALID_VALUE, "Device does not support shader model 6.2.");
 
         return device;
     }
@@ -185,7 +185,7 @@ namespace sssr
     ID3D12GraphicsCommandList* ContextD3D12::GetCommandList(Context& context, ID3D12GraphicsCommandList* command_list)
     {
         if (!command_list)
-            throw reflection_error(context, SSSR_STATUS_INVALID_VALUE, "No command list was supplied, cannot encode device commands");
+            throw reflection_error(context, FFX_SSSR_STATUS_INVALID_VALUE, "No command list was supplied, cannot encode device commands");
         return command_list;
     }
 }

@@ -20,27 +20,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_TEMPORAL_RESOLVE
-#define SSR_TEMPORAL_RESOLVE
+#ifndef FFX_SSSR_TEMPORAL_RESOLVE
+#define FFX_SSSR_TEMPORAL_RESOLVE
 
-// In:
-Texture2D<SSR_NORMALS_TEXTURE_FORMAT> g_normal                   : register(t0);
-Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness             : register(t1);
-Texture2D<SSR_NORMALS_TEXTURE_FORMAT> g_normal_history           : register(t2);
-Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness_history     : register(t3);
-Texture2D<SSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer              : register(t4);
-Texture2D<SSR_MOTION_VECTOR_TEXTURE_FORMAT> g_motion_vectors    : register(t5);
-Texture2D<float4> g_temporally_denoised_reflections_history     : register(t6); // reflection colors at the end of the temporal resolve pass of the previous frame.
-Texture2D<float> g_ray_lengths                                  : register(t7);
-Buffer<uint> g_tile_list                                        : register(t8);
+Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>          g_normal                : register(t0);
+Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>        g_roughness             : register(t1);
+Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>          g_normal_history        : register(t2);
+Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>        g_roughness_history     : register(t3);
+Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>            g_depth_buffer          : register(t4);
+Texture2D<FFX_SSSR_MOTION_VECTOR_TEXTURE_FORMAT>    g_motion_vectors        : register(t5);
 
-// Samplers:
-SamplerState g_linear_sampler                                   : register(s0);
+SamplerState g_linear_sampler                                               : register(s0);
 
-// Out:
-RWTexture2D<float4> g_temporally_denoised_reflections           : register(u0);
-RWTexture2D<float4> g_spatially_denoised_reflections            : register(u1); // Technically still an input, but we have to keep it as UAV
-RWTexture2D<float>  g_temporal_variance                         : register(u2); 
+RWTexture2D<float4> g_temporally_denoised_reflections                       : register(u0);
+RWTexture2D<float4> g_spatially_denoised_reflections                        : register(u1);
+RWTexture2D<float>  g_temporal_variance                                     : register(u2);
+RWTexture2D<float4> g_temporally_denoised_reflections_history               : register(u3); // Reflection colors at the end of the temporal resolve pass of the previous frame.
+RWTexture2D<float>  g_ray_lengths                                           : register(u4);
+RWBuffer<uint>      g_tile_list                                             : register(u5);
 
 // From "Temporal Reprojection Anti-Aliasing"
 // https://github.com/playdeadgames/temporal
@@ -118,7 +115,7 @@ float3 EstimateStdDeviation(int2 did, RWTexture2D<float4> tex)
     return sqrt(max(color_std, 0.0));
 }
 
-float3 SampleRadiance(int2 texel_coords, Texture2D<float4> tex)
+float3 SampleRadiance(int2 texel_coords, RWTexture2D<float4> tex)
 {
     return tex.Load(int3(texel_coords, 0)).xyz;
 }
@@ -132,7 +129,7 @@ float2 GetSurfaceReprojection(int2 did, float2 uv, float2 motion_vector)
 
 float2 GetHitPositionReprojection(int2 did, float2 uv, float reflected_ray_length)
 {
-    float z = SssrUnpackDepth(g_depth_buffer.Load(int3(did, 0)));
+    float z = FfxSssrUnpackDepth(g_depth_buffer.Load(int3(did, 0)));
     float3 view_space_ray = CreateViewSpaceRay(float3(uv, z)).direction;
 
     // We start out with reconstructing the ray length in view space. 
@@ -186,11 +183,11 @@ float4 ResolveScreenspaceReflections(int2 did, float2 uv, uint2 image_size, floa
 {
     float3 normal = LoadNormal(did, g_normal);
     float3 radiance = g_spatially_denoised_reflections.Load(did).xyz;
-    float3 radiance_history = g_temporally_denoised_reflections_history.Load(int3(did, 0)).xyz;
-    float ray_length = g_ray_lengths.Load(int3(did, 0));
+    float3 radiance_history = g_temporally_denoised_reflections_history.Load(did).xyz;
+    float ray_length = g_ray_lengths.Load(did);
 
     // And clip it to the local neighborhood
-    float2 motion_vector = SssrUnpackMotionVectors(g_motion_vectors.Load(int3(did, 0)));
+    float2 motion_vector = FfxSssrUnpackMotionVectors(g_motion_vectors.Load(int3(did, 0)));
     float3 color_std = EstimateStdDeviation(did, g_spatially_denoised_reflections);
     color_std *= (dot(motion_vector, motion_vector) == 0) ? 8 : 2.2; // Allow more accumulation if the surface did not move.
     
@@ -214,14 +211,14 @@ float4 ResolveScreenspaceReflections(int2 did, float2 uv, uint2 image_size, floa
     }
 
     radiance = lerp(radiance, reprojection, weight);
-    float temporal_variance = ComputeTemporalVariance(radiance_history, radiance) > SSR_TEMPORAL_VARIANCE_THRESHOLD ? 1 : 0;
+    float temporal_variance = ComputeTemporalVariance(radiance_history, radiance) > FFX_SSSR_TEMPORAL_VARIANCE_THRESHOLD ? 1 : 0;
     return float4(radiance.xyz, temporal_variance);
 }
 
 void Resolve(int2 did)
 {
     float roughness = LoadRoughness(did, g_roughness);
-    if (!DoSSR(roughness) || IsMirrorReflection(roughness))
+    if (!IsGlossy(roughness) || IsMirrorReflection(roughness))
     {
         return;
     }
@@ -244,4 +241,4 @@ void main(uint2 group_thread_id : SV_GroupThreadID, uint group_id : SV_GroupID)
     Resolve((int2)coords);
 }
 
-#endif // SSR_TEMPORAL_RESOLVE
+#endif // FFX_SSSR_TEMPORAL_RESOLVE

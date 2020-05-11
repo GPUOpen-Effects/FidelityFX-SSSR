@@ -20,30 +20,27 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_INTERSECT
-#define SSR_INTERSECT
+#ifndef FFX_SSSR_INTERSECT
+#define FFX_SSSR_INTERSECT
 
-// In:
-Texture2D<SSR_SCENE_TEXTURE_FORMAT> g_lit_scene                         : register(t0); // scene rendered with lighting and shadows
-Texture2D<SSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer_hierarchy            : register(t1);
-Texture2D<SSR_NORMALS_TEXTURE_FORMAT> g_normal                          : register(t2);
-Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness                     : register(t3);
-TextureCube g_environment_map                                           : register(t4);
-Buffer<uint> g_sobol_buffer                                             : register(t5);
-Buffer<uint> g_ranking_tile_buffer                                      : register(t6);
-Buffer<uint> g_scrambling_tile_buffer                                   : register(t7);
-Buffer<uint> g_ray_list                                                 : register(t8);
+Texture2D<FFX_SSSR_SCENE_TEXTURE_FORMAT>        g_lit_scene                 : register(t0); // Scene rendered with lighting and shadows
+Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>        g_depth_buffer_hierarchy    : register(t1);
+Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>      g_normal                    : register(t2);
+Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>    g_roughness                 : register(t3);
+TextureCube                                     g_environment_map           : register(t4);
+Buffer<uint>                                    g_sobol_buffer              : register(t5);
+Buffer<uint>                                    g_ranking_tile_buffer       : register(t6);
+Buffer<uint>                                    g_scrambling_tile_buffer    : register(t7);
 
-// Samplers:
-SamplerState g_linear_sampler                                           : register(s0);
-SamplerState g_environment_map_sampler                                  : register(s1);
+SamplerState g_linear_sampler                                               : register(s0);
+SamplerState g_environment_map_sampler                                      : register(s1);
 
-// Out:
-RWTexture2D<float4> g_intersection_result                               : register(u0); // reflection colors at the end of the intersect pass. 
-RWTexture2D<float> g_ray_lengths                                        : register(u1);
-RWTexture2D<float4> g_denoised_reflections                              : register(u2); // Mirror reflections don't need to be denoised, the intersection pass can just write them to the final target.
+RWTexture2D<float4> g_intersection_result                                   : register(u0); // Reflection colors at the end of the intersect pass. 
+RWTexture2D<float>  g_ray_lengths                                           : register(u1);
+RWTexture2D<float4> g_denoised_reflections                                  : register(u2); // Mirror reflections don't need to be denoised, the intersection pass can just write them to the final target.
+RWBuffer<uint>      g_ray_list                                              : register(u3);
 
-// Blue Noise Sampler. Returns a value in the range [0, 1].
+// Blue Noise Sampler by Eric Heitz. Returns a value in the range [0, 1].
 float SampleRandomNumber(in uint pixel_i, in uint pixel_j, in uint sample_index, in uint sample_dimension)
 {
     // Wrap arguments
@@ -69,39 +66,43 @@ float2 SampleRandomVector2(uint2 pixel)
 {
     const uint sample_index = 0;
     float2 u = float2(
-        fmod(SampleRandomNumber(pixel.x, pixel.y, sample_index, 0u) + (g_frame_index & 0xFFu) * SSR_GOLDEN_RATIO, 1.0f),
-        fmod(SampleRandomNumber(pixel.x, pixel.y, sample_index, 1u) + (g_frame_index & 0xFFu) * SSR_GOLDEN_RATIO, 1.0f));
+        fmod(SampleRandomNumber(pixel.x, pixel.y, sample_index, 0u) + (g_frame_index & 0xFFu) * FFX_SSSR_GOLDEN_RATIO, 1.0f),
+        fmod(SampleRandomNumber(pixel.x, pixel.y, sample_index, 1u) + (g_frame_index & 0xFFu) * FFX_SSSR_GOLDEN_RATIO, 1.0f));
     return u;
 }
+
+#define M_PI FFX_SSSR_PI
 
 // http://jcgt.org/published/0007/04/01/paper.pdf by Eric Heitz
 // Input Ve: view direction
 // Input alpha_x, alpha_y: roughness parameters
 // Input U1, U2: uniform random numbers
 // Output Ne: normal sampled with PDF D_Ve(Ne) = G1(Ve) * max(0, dot(Ve, Ne)) * D(Ne) / Ve.z
-float3 Sample_GGX_VNDF_Ellipsoid(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)
+float3 sampleGGXVNDF(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)
 {
     // Section 3.2: transforming the view direction to the hemisphere configuration
-    float3 Vh = normalize(float3(alpha_x * Ve.x, Ve.y, alpha_y * Ve.z));
-
+    float3 Vh = normalize(float3(alpha_x * Ve.x, alpha_y * Ve.y, Ve.z));
     // Section 4.1: orthonormal basis (with special case if cross product is zero)
-    float3 T1 = (Vh.y < 0.9999) ? normalize(cross(float3(0.0, 1.0, 0.0), Vh)) : float3(0.0, 0.0, 1.0);
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    float3 T1 = lensq > 0 ? float3(-Vh.y, Vh.x, 0) * rsqrt(lensq) : float3(1, 0, 0);
     float3 T2 = cross(Vh, T1);
-
     // Section 4.2: parameterization of the projected area
     float r = sqrt(U1);
-    float phi = 2.0 * SSR_PI * U2;
+    float phi = 2.0 * M_PI * U2;
     float t1 = r * cos(phi);
     float t2 = r * sin(phi);
-    float s = 0.5 * (1.0 + Vh.y);
+    float s = 0.5 * (1.0 + Vh.z);
     t2 = (1.0 - s) * sqrt(1.0 - t1 * t1) + s * t2;
-
     // Section 4.3: reprojection onto hemisphere
     float3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
-
     // Section 3.4: transforming the normal back to the ellipsoid configuration
-    float3 Ne = normalize(float3(alpha_x * Nh.x, clamp(Nh.y, 0, 1), alpha_y * Nh.z));
+    float3 Ne = normalize(float3(alpha_x * Nh.x, alpha_y * Nh.y, max(0.0, Nh.z)));
     return Ne;
+}
+
+float3 Sample_GGX_VNDF_Ellipsoid(float3 Ve, float alpha_x, float alpha_y, float U1, float U2)
+{
+    return sampleGGXVNDF(Ve, alpha_x, alpha_y, U1, U2);
 }
 
 float3 Sample_GGX_VNDF_Hemisphere(float3 Ve, float alpha, float U1, float U2)
@@ -109,7 +110,7 @@ float3 Sample_GGX_VNDF_Hemisphere(float3 Ve, float alpha, float U1, float U2)
     return Sample_GGX_VNDF_Ellipsoid(Ve, alpha, alpha, U1, U2);
 }
 
-float3x3 CreateTNB(float3 N)
+float3x3 CreateTBN(float3 N)
 {
     float3 U;
     if (abs(N.z) > 0.0)
@@ -123,28 +124,28 @@ float3x3 CreateTNB(float3 N)
         U.x = N.y / k; U.y = -N.x / k; U.z = 0.0;
     }
 
-    float3x3 TNB;
-    TNB[0] = U;
-    TNB[1] = N;
-    TNB[2] = cross(N, U);
-    return transpose(TNB);
+    float3x3 TBN;
+    TBN[0] = U;
+    TBN[1] = cross(N, U);
+    TBN[2] = N;
+    return transpose(TBN);
 }
 
 float3 SampleReflectionVector(float3 view_direction, float3 normal, float roughness, int2 did)
 {
-    float3x3 tnb_transform = CreateTNB(normal);
-    float3 view_direction_tnb = mul(-view_direction, tnb_transform);
+    float3x3 tbn_transform = CreateTBN(normal);
+    float3 view_direction_tbn = mul(-view_direction, tbn_transform);
 
     float2 u = SampleRandomVector2(did);
     
-    float3 sampled_normal_tnb = Sample_GGX_VNDF_Hemisphere(view_direction_tnb, roughness, u.x, u.y);
-    // sampled_normal_tnb = float3(0, 1, 0); // Overwrite normal sample to produce perfect reflection.
+    float3 sampled_normal_tbn = Sample_GGX_VNDF_Hemisphere(view_direction_tbn, roughness, u.x, u.y);
+    // sampled_normal_tbn = float3(0, 0, 1); // Overwrite normal sample to produce perfect reflection.
 
-    float3 reflected_direction_tnb = reflect(-view_direction_tnb, sampled_normal_tnb);
+    float3 reflected_direction_tbn = reflect(-view_direction_tbn, sampled_normal_tbn);
 
     // Transform reflected_direction back to the initial space.
-    float3x3 inv_tnb_transform = transpose(tnb_transform);
-    return mul(reflected_direction_tnb, inv_tnb_transform);
+    float3x3 inv_tbn_transform = transpose(tbn_transform);
+    return mul(reflected_direction_tbn, inv_tbn_transform);
 }
 
 float2 GetMipResolution(float2 screen_dimensions, int mip_level)
@@ -154,7 +155,7 @@ float2 GetMipResolution(float2 screen_dimensions, int mip_level)
 
 float LoadDepth(float2 idx, int mip)
 {
-    return SssrUnpackDepth(g_depth_buffer_hierarchy.Load(int3(idx, mip)));
+    return FfxSssrUnpackDepth(g_depth_buffer_hierarchy.Load(int3(idx, mip)));
 }
 
 void InitialAdvanceRay(float3 origin, float3 direction, float3 inv_direction, float2 current_mip_resolution, float2 current_mip_resolution_inv, float2 floor_offset, float2 uv_offset, out float3 position, out float current_t)
@@ -184,7 +185,7 @@ bool AdvanceRay(float3 origin, float3 direction, float3 inv_direction, float2 cu
     float3 t = (boundary_planes - origin) * inv_direction;
 
     // Prevent using z plane when shooting out of the depth buffer.
-    t.z = direction.z > 0 ? t.z : SSR_FLOAT_MAX;
+    t.z = direction.z > 0 ? t.z : FFX_SSSR_FLOAT_MAX;
 
     // Choose nearest intersection with a boundary.
     float t_min = min(min(t.x, t.y), t.z);
@@ -209,7 +210,7 @@ float3 HierarchicalRaymarch(float3 origin, float3 direction, bool is_mirror, flo
 {
     int most_detailed_mip = is_mirror ? 0 : g_most_detailed_mip;
 
-    const float3 inv_direction = direction != 0 ? 1.0 / direction : SSR_FLOAT_MAX;
+    const float3 inv_direction = direction != 0 ? 1.0 / direction : FFX_SSSR_FLOAT_MAX;
 
     // Start on mip with highest detail.
     int current_mip = most_detailed_mip;
@@ -321,7 +322,7 @@ void Intersect(int2 did)
 
     bool valid_hit;
     float3 hit = HierarchicalRaymarch(screen_space_ray.origin, screen_space_ray.direction, is_mirror, screen_size, valid_hit);
-    float3 world_space_reflected_direction = mul(float4(view_space_reflected_direction, 0), g_inv_view);
+    float3 world_space_reflected_direction = mul(float4(view_space_reflected_direction, 0), g_inv_view).xyz;
     float confidence = valid_hit ? ValidateHit(hit, screen_space_ray, world_space_reflected_direction, screen_size) : 0;
 
     float3 world_space_origin = InvProjectPosition(screen_space_ray.origin, g_inv_view_proj);
@@ -332,7 +333,7 @@ void Intersect(int2 did)
     if (confidence > 0)
     {
         // Found an intersection with the depth buffer -> We can lookup the color from lit scene.
-        reflection_radiance = SssrUnpackSceneRadiance(g_lit_scene.Load(int3(screen_size * hit.xy, 0)));
+        reflection_radiance = FfxSssrUnpackSceneRadiance(g_lit_scene.Load(int3(screen_size * hit.xy, 0)));
     }
 
     // Sample environment map.
@@ -358,4 +359,4 @@ void main(uint group_index : SV_GroupIndex, uint group_id : SV_GroupID)
     Intersect((int2)coords);
 }
 
-#endif // SSR_INTERSECT
+#endif // FFX_SSSR_INTERSECT

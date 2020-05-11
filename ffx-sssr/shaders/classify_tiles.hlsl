@@ -20,22 +20,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-#ifndef SSR_CLASSIFY_TILES
-#define SSR_CLASSIFY_TILES
+#ifndef FFX_SSSR_CLASSIFY_TILES
+#define FFX_SSSR_CLASSIFY_TILES
 
-// In:
-Texture2D<SSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness                 : register(t0);
+Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness                    : register(t0);
 
-// Out:
-RWBuffer<uint> g_tile_list                                          : register(u0);
-RWBuffer<uint> g_ray_list                                           : register(u1);
-globallycoherent RWBuffer<uint> g_tile_counter                      : register(u2);
-globallycoherent RWBuffer<uint> g_ray_counter                       : register(u3);
-RWTexture2D<float4> g_temporally_denoised_reflections               : register(u4);
-RWTexture2D<float4> g_temporally_denoised_reflections_history       : register(u5);
-RWTexture2D<float> g_ray_lengths                                    : register(u6);
-RWTexture2D<float> g_temporal_variance                              : register(u7);
-RWTexture2D<float4> g_denoised_reflections                          : register(u8); 
+RWBuffer<uint>                  g_tile_list                                 : register(u0);
+RWBuffer<uint>                  g_ray_list                                  : register(u1);
+globallycoherent RWBuffer<uint> g_tile_counter                              : register(u2);
+globallycoherent RWBuffer<uint> g_ray_counter                               : register(u3);
+RWTexture2D<float4>             g_temporally_denoised_reflections           : register(u4);
+RWTexture2D<float4>             g_temporally_denoised_reflections_history   : register(u5);
+RWTexture2D<float>              g_ray_lengths                               : register(u6);
+RWTexture2D<float>              g_temporal_variance                         : register(u7);
+RWTexture2D<float4>             g_denoised_reflections                      : register(u8); 
 
 groupshared uint g_ray_count;
 groupshared uint g_ray_base_index;
@@ -55,8 +53,8 @@ void main(uint2 did : SV_DispatchThreadID, uint group_index : SV_GroupIndex)
     bool needs_ray = !(did.x >= screen_size.x || did.y >= screen_size.y);
     
     // Dont shoot a ray on very rough surfaces.
-    float roughness = SssrUnpackRoughness(g_roughness.Load(int3(did, 0)));    
-    needs_ray = needs_ray && DoSSR(roughness);
+    float roughness = FfxSssrUnpackRoughness(g_roughness.Load(int3(did, 0)));    
+    needs_ray = needs_ray && IsGlossy(roughness);
 
     // Also we dont need to run the denoiser on mirror reflections.
     bool needs_denoiser = needs_ray && !IsMirrorReflection(roughness);
@@ -128,4 +126,4 @@ void main(uint2 did : SV_DispatchThreadID, uint group_index : SV_GroupIndex)
     g_temporal_variance[did] = needs_ray ? (1 - g_skip_denoiser) : 0; // Re-purpose g_temporal_variance to hold the information for the spatial pass if a ray has been shot. Always write 0 if no denoiser is running.
 }
 
-#endif // SSR_CLASSIFY_TILES
+#endif // FFX_SSSR_CLASSIFY_TILES

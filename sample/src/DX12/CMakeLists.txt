@@ -1,10 +1,10 @@
-project (SSSRSample_DX12)
+project (SssrSample_DX12)
 
 add_compile_options(/MP)
 
 set(Sources_src 
-	Sources/SSSRSample.cpp
-	Sources/SSSRSample.h
+	Sources/SssrSample.cpp
+	Sources/SssrSample.h
 	Sources/SampleRenderer.cpp
 	Sources/SampleRenderer.h
 	Sources/stdafx.cpp

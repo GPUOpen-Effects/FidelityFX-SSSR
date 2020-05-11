@@ -26,7 +26,7 @@ THE SOFTWARE.
 #include "macros.h"
 #include "ffx_sssr.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
         The BlueNoiseSamplerD3D12 class represents a blue-noise sampler to be used for random number generation.
@@ -35,7 +35,7 @@ namespace sssr
     */
     class BlueNoiseSamplerD3D12
     {
-        SSSR_NON_COPYABLE(BlueNoiseSamplerD3D12);
+        FFX_SSSR_NON_COPYABLE(BlueNoiseSamplerD3D12);
 
     public:
         BlueNoiseSamplerD3D12();

@@ -28,7 +28,7 @@ THE SOFTWARE.
 #undef max
 #undef min
 
-void SSRLoggingFunction(const char* pMessage, void* pUserData)
+void FfxSssrLoggingFunction(const char* pMessage, void* pUserData)
 {
     Trace(pMessage);
 }
@@ -41,7 +41,6 @@ void SSRLoggingFunction(const char* pMessage, void* pUserData)
 void SampleRenderer::OnCreate(Device* pDevice, SwapChain *pSwapChain)
 {
     m_pDevice = pDevice;
-    m_CurrentFrame = 0;
 
     // Initialize helpers
 
@@ -134,36 +133,36 @@ void SampleRenderer::OnCreate(Device* pDevice, SwapChain *pSwapChain)
     ID3D12GraphicsCommandList * cl;
     ThrowIfFailed(m_pDevice->GetDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, ca, nullptr, IID_PPV_ARGS(&cl)));
 
-    SssrCreateContextInfoD3D12 d3d12ContextInfo = {};
+    FfxSssrD3D12CreateContextInfo d3d12ContextInfo = {};
     d3d12ContextInfo.pDevice = m_pDevice->GetDevice();
     d3d12ContextInfo.pUploadCommandList = cl;
 
-    SssrLoggingCallbacks loggingCallbacks = {};
+    FfxSssrLoggingCallbacks loggingCallbacks = {};
     loggingCallbacks.pUserData = this;
-    loggingCallbacks.pfnLogging = SSRLoggingFunction;
+    loggingCallbacks.pfnLogging = FfxSssrLoggingFunction;
 
-    SssrCreateContextInfo contextInfo = {};
-    contextInfo.apiVersion = SSSR_API_VERSION;
-    contextInfo.frameCountBeforeMemoryReuse = 2;
+    FfxSssrCreateContextInfo contextInfo = {};
+    contextInfo.apiVersion = FFX_SSSR_API_VERSION;
+    contextInfo.frameCountBeforeMemoryReuse = backBufferCount;
     contextInfo.maxReflectionViewCount = 1;
-    contextInfo.pCreateContextInfoD3D12 = &d3d12ContextInfo;
+    contextInfo.pD3D12CreateContextInfo = &d3d12ContextInfo;
     contextInfo.pLoggingCallbacks = &loggingCallbacks;
     contextInfo.uploadBufferSize = 8 * 1024 * 1024;
     contextInfo.pRoughnessTextureFormat = L"float4";
-    contextInfo.pUnpackRoughnessSnippet = L"float SssrUnpackRoughness(SSR_ROUGHNESS_TEXTURE_FORMAT packed) { return packed.w; }";
+    contextInfo.pUnpackRoughnessSnippet = L"float FfxSssrUnpackRoughness(FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT packed) { return packed.w; }";
     contextInfo.pNormalsTextureFormat = L"float4";
-    contextInfo.pUnpackNormalsSnippet = L"float3 SssrUnpackNormals(SSR_NORMALS_TEXTURE_FORMAT packed) { return 2 * packed.xyz - 1; }";
+    contextInfo.pUnpackNormalsSnippet = L"float3 FfxSssrUnpackNormals(FFX_SSSR_NORMALS_TEXTURE_FORMAT packed) { return 2 * packed.xyz - 1; }";
     contextInfo.pSceneTextureFormat = L"float4";
-    contextInfo.pUnpackSceneRadianceSnippet = L"float3 SssrUnpackSceneRadiance(SSR_SCENE_TEXTURE_FORMAT packed) { return packed.xyz; }";
+    contextInfo.pUnpackSceneRadianceSnippet = L"float3 FfxSssrUnpackSceneRadiance(FFX_SSSR_SCENE_TEXTURE_FORMAT packed) { return packed.xyz; }";
     contextInfo.pDepthTextureFormat = L"float";
-    contextInfo.pUnpackDepthSnippet = L"float SssrUnpackDepth(SSR_DEPTH_TEXTURE_FORMAT packed) { return packed.x; }";
+    contextInfo.pUnpackDepthSnippet = L"float FfxSssrUnpackDepth(FFX_SSSR_DEPTH_TEXTURE_FORMAT packed) { return packed.x; }";
     contextInfo.pMotionVectorFormat = L"float2";
-    contextInfo.pUnpackMotionVectorsSnippet = L"float2 SssrUnpackMotionVectors(SSR_MOTION_VECTOR_TEXTURE_FORMAT packed) { return packed.xy * float2(0.5, -0.5); }";
+    contextInfo.pUnpackMotionVectorsSnippet = L"float2 FfxSssrUnpackMotionVectors(FFX_SSSR_MOTION_VECTOR_TEXTURE_FORMAT packed) { return packed.xy * float2(0.5, -0.5); }";
 
-    SssrStatus status = sssrCreateContext(&contextInfo, &m_SssrContext);
-    if (status != SSSR_STATUS_OK)
+    FfxSssrStatus status = ffxSssrCreateContext(&contextInfo, &m_SssrContext);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrCreateContext failed.");
+        Trace("ffxSssrCreateContext failed.");
     }
 
     // Wait for the upload to finish;
@@ -214,7 +213,7 @@ void SampleRenderer::OnDestroy()
     m_ShadowMap.OnDestroy();
     m_BrdfLut.OnDestroy();
 
-    sssrDestroyContext(m_SssrContext);
+    ffxSssrDestroyContext(m_SssrContext);
 
     if (m_ApplyPipelineState != nullptr)
         m_ApplyPipelineState->Release();
@@ -315,7 +314,7 @@ void SampleRenderer::OnCreateWindowSizeDependentResources(SwapChain *pSwapChain,
         m_AtomicCounter.CreateBufferUAV(0, NULL, &m_AtomicCounterUAVGPU);
     }
 
-    // Setup SSR
+    // Setup resource views
     //
     m_HDR.CreateSRV(0, &m_SssrSceneSRV);
     m_DepthHierarchy.CreateSRV(0, &m_SssrDepthBufferHierarchySRV);
@@ -329,7 +328,7 @@ void SampleRenderer::OnCreateWindowSizeDependentResources(SwapChain *pSwapChain,
 
     m_SkyDome.SetDescriptorSpec(0, &m_SssrEnvironmentMapSRV, 0, &m_SssrEnvironmentMapSamplerDesc);
 
-    SssrCreateReflectionViewInfoD3D12 d3d12ReflectionViewInfo = {};
+    FfxSssrD3D12CreateReflectionViewInfo d3d12ReflectionViewInfo = {};
     d3d12ReflectionViewInfo.depthBufferHierarchySRV         = m_SssrDepthBufferHierarchySRV.GetCPU();
     d3d12ReflectionViewInfo.motionBufferSRV                 = m_SssrMotionBufferSRV.GetCPU();
     d3d12ReflectionViewInfo.normalBufferSRV                 = m_SssrNormalBufferSRV.GetCPU();
@@ -345,18 +344,18 @@ void SampleRenderer::OnCreateWindowSizeDependentResources(SwapChain *pSwapChain,
     bool pingPongNormalBuffers           = false;
     bool pingPongRoughnessBuffers        = false;
 
-    SssrCreateReflectionViewInfo reflectionViewInfo = {};
-    reflectionViewInfo.flags = SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS;
-    reflectionViewInfo.flags |= pingPongNormalBuffers ? SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_NORMAL_BUFFERS : 0;
-    reflectionViewInfo.flags |= pingPongRoughnessBuffers ? SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_ROUGHNESS_BUFFERS : 0;
+    FfxSssrCreateReflectionViewInfo reflectionViewInfo = {};
+    reflectionViewInfo.flags = FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS;
+    reflectionViewInfo.flags |= pingPongNormalBuffers ? FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_NORMAL_BUFFERS : 0;
+    reflectionViewInfo.flags |= pingPongRoughnessBuffers ? FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_ROUGHNESS_BUFFERS : 0;
     reflectionViewInfo.outputWidth = m_Width;
     reflectionViewInfo.outputHeight = m_Height;
-    reflectionViewInfo.pCreateReflectionViewInfoD3D12 = &d3d12ReflectionViewInfo;
+    reflectionViewInfo.pD3D12CreateReflectionViewInfo = &d3d12ReflectionViewInfo;
 
-    SssrStatus status = sssrCreateReflectionView(m_SssrContext, &reflectionViewInfo, &m_SssrReflectionView);
-    if (status != SSSR_STATUS_OK)
+    FfxSssrStatus status = ffxSssrCreateReflectionView(m_SssrContext, &reflectionViewInfo, &m_SssrReflectionView);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrCreateReflectionView failed.");
+        Trace("ffxSssrCreateReflectionView failed.");
     }
     m_SssrCreatedReflectionView = true;
 
@@ -386,7 +385,7 @@ void SampleRenderer::OnDestroyWindowSizeDependentResources()
 
     if (m_SssrCreatedReflectionView)
     {
-        sssrDestroyReflectionView(m_SssrContext, m_SssrReflectionView);
+        ffxSssrDestroyReflectionView(m_SssrContext, m_SssrReflectionView);
     }
 
     m_HDR.OnDestroy();
@@ -586,11 +585,10 @@ void SampleRenderer::StallFrame(float targetFrametime)
 
 void SampleRenderer::BeginFrame()
 {
-    m_CurrentFrame = 1 - m_CurrentFrame;
-    SssrStatus status = sssrAdvanceToNextFrame(m_SssrContext);
-    if (status != SSSR_STATUS_OK)
+    FfxSssrStatus status = ffxSssrAdvanceToNextFrame(m_SssrContext);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrAdvanceToNextFrame failed.");
+        Trace("ffxSssrAdvanceToNextFrame failed.");
     }
 
     // Timing values
@@ -667,6 +665,8 @@ per_frame * SampleRenderer::FillFrameConstants(State *pState)
 
 void SampleRenderer::RenderSpotLights(ID3D12GraphicsCommandList* pCmdLst1, per_frame * pPerFrame)
 {
+    UserMarker marker(pCmdLst1, "Shadow Map");
+
     for (uint32_t i = 0; i < pPerFrame->lightCount; i++)
     {
         if (!(pPerFrame->lights[i].type == LightType_Spot || pPerFrame->lights[i].type == LightType_Directional))
@@ -685,12 +685,14 @@ void SampleRenderer::RenderSpotLights(ID3D12GraphicsCommandList* pCmdLst1, per_f
 
         m_gltfDepth->Draw(pCmdLst1);
 
-        m_GPUTimer.GetTimeStamp(pCmdLst1, "Shadow map");
+        m_GPUTimer.GetTimeStamp(pCmdLst1, "Shadow Map");
     }
 }
 
 void SampleRenderer::RenderMotionVectors(ID3D12GraphicsCommandList* pCmdLst1, per_frame * pPerFrame, State * pState)
 {
+    UserMarker marker(pCmdLst1, "Motion Vectors");
+
     // Compute motion vectors
     pCmdLst1->RSSetViewports(1, &m_Viewport);
     pCmdLst1->RSSetScissorRects(1, &m_Scissor);
@@ -709,11 +711,13 @@ void SampleRenderer::RenderMotionVectors(ID3D12GraphicsCommandList* pCmdLst1, pe
     cbDepthPerFrame->mPrevViewProj = pState->camera.GetPrevView() * pState->camera.GetProjection();
 
     m_gltfMotionVectors->Draw(pCmdLst1);
-    m_GPUTimer.GetTimeStamp(pCmdLst1, "Motion vectors");
+    m_GPUTimer.GetTimeStamp(pCmdLst1, "Motion Vectors");
 }
 
 void SampleRenderer::RenderSkydome(ID3D12GraphicsCommandList* pCmdLst1, per_frame * pPerFrame, State * pState)
 {
+    UserMarker marker(pCmdLst1, "Skydome");
+
     if (pState->skyDomeType == 1)
     {
         XMMATRIX clipToView = XMMatrixInverse(NULL, pPerFrame->mCameraViewProj);
@@ -773,7 +777,7 @@ void SampleRenderer::DownsampleDepthBuffer(ID3D12GraphicsCommandList* pCmdLst1)
 
 void SampleRenderer::RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCmdLst1, State * pState)
 {
-    UserMarker marker(pCmdLst1, "SSR");
+    UserMarker marker(pCmdLst1, "FidelityFX SSSR");
 
     const Camera * camera = &pState->camera;
     XMMATRIX view = camera->GetView();
@@ -784,44 +788,44 @@ void SampleRenderer::RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCm
     XMFLOAT4X4 cameraProj;
     XMStoreFloat4x4(&cameraProj, XMMatrixTranspose(proj));
 
-    SssrStatus status;
-    status = sssrReflectionViewSetCameraParameters(m_SssrContext, m_SssrReflectionView, &cameraView.m[0][0], &cameraProj.m[0][0]);
-    if (status != SSSR_STATUS_OK)
+    FfxSssrStatus status;
+    status = ffxSssrReflectionViewSetCameraParameters(m_SssrContext, m_SssrReflectionView, &cameraView.m[0][0], &cameraProj.m[0][0]);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrReflectionViewSetCameraParameters failed.");
+        Trace("ffxSssrReflectionViewSetCameraParameters failed.");
     }
 
     FLOAT clearValues[4] = { 0, 0, 0, 0 };
     pCmdLst1->ClearUnorderedAccessViewFloat(m_SssrOutputBufferUAVGPU.GetGPU(), m_SssrOutputBufferUAV.GetCPU(), m_SssrOutputBuffer.GetResource(), clearValues, 0, nullptr);
 
-    SssrCommandEncodeInfoD3D12 d3d12EncodeInfo = {};
+    FfxSssrD3D12CommandEncodeInfo d3d12EncodeInfo = {};
     d3d12EncodeInfo.pCommandList = pCmdLst1;
 
-    SssrResolveReflectionViewInfo resolveInfo = {};
-    resolveInfo.flags = pState->bShowIntersectionResults ? 0 : SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE;
-    resolveInfo.flags |= pState->bEnableVarianceGuidedTracing ? SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING : 0;
-    resolveInfo.pCommandEncodeInfoD3D12 = &d3d12EncodeInfo;
+    FfxSssrResolveReflectionViewInfo resolveInfo = {};
+    resolveInfo.flags = pState->bShowIntersectionResults ? 0 : FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE;
+    resolveInfo.flags |= pState->bEnableVarianceGuidedTracing ? FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING : 0;
+    resolveInfo.pD3D12CommandEncodeInfo = &d3d12EncodeInfo;
     resolveInfo.temporalStabilityScale = pState->temporalStability;
     resolveInfo.maxTraversalIterations = pState->maxTraversalIterations;
     resolveInfo.mostDetailedDepthHierarchyMipLevel = pState->mostDetailedDepthHierarchyMipLevel;
     resolveInfo.depthBufferThickness = pState->depthBufferThickness;
     resolveInfo.minTraversalOccupancy = pState->minTraversalOccupancy;
-    resolveInfo.samplesPerQuad = pState->samplesPerQuad == 4 ? SSSR_RAY_SAMPLES_PER_QUAD_4 : (pState->samplesPerQuad == 2 ? SSSR_RAY_SAMPLES_PER_QUAD_2 : SSSR_RAY_SAMPLES_PER_QUAD_1);
-    resolveInfo.eawPassCount = pState->eawPassCount == 3 ? SSSR_EAW_PASS_COUNT_3 : SSSR_EAW_PASS_COUNT_1;
+    resolveInfo.samplesPerQuad = pState->samplesPerQuad == 4 ? FFX_SSSR_RAY_SAMPLES_PER_QUAD_4 : (pState->samplesPerQuad == 2 ? FFX_SSSR_RAY_SAMPLES_PER_QUAD_2 : FFX_SSSR_RAY_SAMPLES_PER_QUAD_1);
+    resolveInfo.eawPassCount = pState->eawPassCount == 3 ? FFX_SSSR_EAW_PASS_COUNT_3 : FFX_SSSR_EAW_PASS_COUNT_1;
     resolveInfo.roughnessThreshold = pState->roughnessThreshold;
 
-    status = sssrEncodeResolveReflectionView(m_SssrContext, m_SssrReflectionView, &resolveInfo);
-    if (status != SSSR_STATUS_OK)
+    status = ffxSssrEncodeResolveReflectionView(m_SssrContext, m_SssrReflectionView, &resolveInfo);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrEncodeResolveReflectionView failed.");
+        Trace("ffxSssrEncodeResolveReflectionView failed.");
     }
 
     // Query timings
     uint64_t tileClassificationTime;
-    status = sssrReflectionViewGetTileClassificationElapsedTime(m_SssrContext, m_SssrReflectionView, &tileClassificationTime);
-    if (status != SSSR_STATUS_OK)
+    status = ffxSssrReflectionViewGetTileClassificationElapsedTime(m_SssrContext, m_SssrReflectionView, &tileClassificationTime);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrReflectionViewGetTileClassificationElapsedTime failed.");
+        Trace("ffxSssrReflectionViewGetTileClassificationElapsedTime failed.");
     }
 
     static std::deque<float> tileClassificationTimes(100);
@@ -835,10 +839,10 @@ void SampleRenderer::RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCm
     pState->tileClassificationTime /= tileClassificationTimes.size();
 
     uint64_t intersectionTime;
-    status = sssrReflectionViewGetIntersectionElapsedTime(m_SssrContext, m_SssrReflectionView, &intersectionTime);
-    if (status != SSSR_STATUS_OK)
+    status = ffxSssrReflectionViewGetIntersectionElapsedTime(m_SssrContext, m_SssrReflectionView, &intersectionTime);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrReflectionViewGetIntersectionElapsedTime failed.");
+        Trace("ffxSssrReflectionViewGetIntersectionElapsedTime failed.");
     }
 
     static std::deque<float> intersectionTimes(100);
@@ -852,10 +856,10 @@ void SampleRenderer::RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCm
     pState->intersectionTime /= intersectionTimes.size();
 
     uint64_t denoisingTime;
-    status = sssrReflectionViewGetDenoisingElapsedTime(m_SssrContext, m_SssrReflectionView, &denoisingTime);
-    if (status != SSSR_STATUS_OK)
+    status = ffxSssrReflectionViewGetDenoisingElapsedTime(m_SssrContext, m_SssrReflectionView, &denoisingTime);
+    if (status != FFX_SSSR_STATUS_OK)
     {
-        Trace("sssrReflectionViewGetDenoisingElapsedTime failed.");
+        Trace("ffxSssrReflectionViewGetDenoisingElapsedTime failed.");
     }
 
     static std::deque<float> denoisingTimes(100);
@@ -868,7 +872,7 @@ void SampleRenderer::RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCm
     }
     pState->denoisingTime /= denoisingTimes.size();
 
-    m_GPUTimer.GetTimeStamp(pCmdLst1, "SSSR Draw");
+    m_GPUTimer.GetTimeStamp(pCmdLst1, "FidelityFX SSSR");
 }
 
 void SampleRenderer::CopyHistorySurfaces(ID3D12GraphicsCommandList* pCmdLst1)
@@ -925,42 +929,50 @@ void SampleRenderer::ApplyReflectionTarget(ID3D12GraphicsCommandList* pCmdLst1, 
 
 void SampleRenderer::DownsampleScene(ID3D12GraphicsCommandList* pCmdLst1)
 {
+    UserMarker marker(pCmdLst1, "Downsample Scene");
+
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[] = { m_HDRRTV.GetCPU() };
     pCmdLst1->OMSetRenderTargets(ARRAYSIZE(renderTargets), renderTargets, false, NULL);
 
     m_DownSample.Draw(pCmdLst1);
     //m_downSample.Gui();
-    m_GPUTimer.GetTimeStamp(pCmdLst1, "Downsample");
+    m_GPUTimer.GetTimeStamp(pCmdLst1, "Downsample Scene");
 }
 
 void SampleRenderer::RenderBloom(ID3D12GraphicsCommandList* pCmdLst1)
 {
+    UserMarker marker(pCmdLst1, "Render Bloom");
+
     D3D12_CPU_DESCRIPTOR_HANDLE renderTargets[] = { m_HDRRTV.GetCPU() };
     pCmdLst1->OMSetRenderTargets(ARRAYSIZE(renderTargets), renderTargets, false, NULL);
 
     m_Bloom.Draw(pCmdLst1, &m_HDR);
-    m_GPUTimer.GetTimeStamp(pCmdLst1, "Bloom");
+    m_GPUTimer.GetTimeStamp(pCmdLst1, "Render Bloom");
 }
 
 void SampleRenderer::ApplyTonemapping(ID3D12GraphicsCommandList* pCmdLst2, State * pState, SwapChain *pSwapChain)
 {
+    UserMarker marker(pCmdLst2, "Apply Tonemapping");
+
     pCmdLst2->RSSetViewports(1, &m_Viewport);
     pCmdLst2->RSSetScissorRects(1, &m_Scissor);
     pCmdLst2->OMSetRenderTargets(1, pSwapChain->GetCurrentBackBufferRTV(), false, NULL);
 
     m_ToneMapping.Draw(pCmdLst2, &m_HDRSRV, pState->exposure, pState->toneMapper);
-    m_GPUTimer.GetTimeStamp(pCmdLst2, "Tone mapping");
+    m_GPUTimer.GetTimeStamp(pCmdLst2, "Apply Tonemapping");
 }
 
 void SampleRenderer::RenderHUD(ID3D12GraphicsCommandList* pCmdLst2, SwapChain *pSwapChain)
 {
+    UserMarker marker(pCmdLst2, "Render HUD");
+
     pCmdLst2->RSSetViewports(1, &m_Viewport);
     pCmdLst2->RSSetScissorRects(1, &m_Scissor);
     pCmdLst2->OMSetRenderTargets(1, pSwapChain->GetCurrentBackBufferRTV(), false, NULL);
 
     m_ImGUI.Draw(pCmdLst2);
 
-    m_GPUTimer.GetTimeStamp(pCmdLst2, "ImGUI rendering");
+    m_GPUTimer.GetTimeStamp(pCmdLst2, "Render HUD");
 }
 
 void Barriers(ID3D12GraphicsCommandList* pCmdLst, const std::vector<D3D12_RESOURCE_BARRIER>& barriers)
@@ -1071,21 +1083,23 @@ void SampleRenderer::OnRender(State *pState, SwapChain *pSwapChain)
 
     Barriers(pCmdLst1, {
         CD3DX12_RESOURCE_BARRIER::UAV(m_DepthHierarchy.GetResource()),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_DepthHierarchy.GetResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_DepthBuffer.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_HDR.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0),
         CD3DX12_RESOURCE_BARRIER::Transition(m_NormalBuffer.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0),
         CD3DX12_RESOURCE_BARRIER::Transition(m_SpecularRoughness.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0),
-        CD3DX12_RESOURCE_BARRIER::Transition(m_MotionVectors.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0)
-    });
+        CD3DX12_RESOURCE_BARRIER::Transition(m_MotionVectors.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 0),
+        });
 
-    // Stochastic SSR
+    // Stochastic Screen Space Reflections
     if (m_gltfPBR && pPerFrame != NULL) // Only draw reflections if we draw objects
     {
         RenderScreenSpaceReflections(pCmdLst1, pState);
     }
 
     Barriers(pCmdLst1, {
-        CD3DX12_RESOURCE_BARRIER::UAV(m_SssrOutputBuffer.GetResource()), // Wait for reflection target to be written
+        CD3DX12_RESOURCE_BARRIER::Transition(m_SssrOutputBuffer.GetResource(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE), // Wait for reflection target to be written
+        CD3DX12_RESOURCE_BARRIER::Transition(m_DepthHierarchy.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
         CD3DX12_RESOURCE_BARRIER::Transition(m_NormalBuffer.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_SpecularRoughness.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_SOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_NormalHistoryBuffer.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST),
@@ -1095,15 +1109,15 @@ void SampleRenderer::OnRender(State *pState, SwapChain *pSwapChain)
     CopyHistorySurfaces(pCmdLst1); // Keep this frames results for next frame
 
     Barriers(pCmdLst1, {
-        CD3DX12_RESOURCE_BARRIER::Transition(m_NormalBuffer.GetResource(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
-        CD3DX12_RESOURCE_BARRIER::Transition(m_SpecularRoughness.GetResource(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_NormalBuffer.GetResource(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_SpecularRoughness.GetResource(), D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_NormalHistoryBuffer.GetResource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_SpecularRoughnessHistory.GetResource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE),
         CD3DX12_RESOURCE_BARRIER::Transition(m_HDR.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET, 0),
         CD3DX12_RESOURCE_BARRIER::Transition(m_MotionVectors.GetResource(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET, 0)
     });
 
-    // Apply the result of SSR
+    // Apply the result of SSSR
     if (m_gltfPBR && pPerFrame != NULL) // only reflect if we draw objects
     {
         ApplyReflectionTarget(pCmdLst1, pState);
@@ -1111,9 +1125,17 @@ void SampleRenderer::OnRender(State *pState, SwapChain *pSwapChain)
 
     // Bloom, takes HDR as input and applies bloom to it.
     Barriers(pCmdLst1, {
-            CD3DX12_RESOURCE_BARRIER::Transition(m_HDR.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)
+        CD3DX12_RESOURCE_BARRIER::Transition(m_HDR.GetResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_SssrOutputBuffer.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_SpecularRoughness.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET),
+        CD3DX12_RESOURCE_BARRIER::Transition(m_NormalBuffer.GetResource(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET)
     });
-    RenderBloom(pCmdLst1);
+
+    if (pState->bDrawBloom)
+    {
+        DownsampleScene(pCmdLst1);
+        RenderBloom(pCmdLst1);
+    }
 
     // Submit command buffer
     ThrowIfFailed(pCmdLst1->Close());

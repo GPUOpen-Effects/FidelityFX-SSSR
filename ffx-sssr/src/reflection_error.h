@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 #include "ffx_sssr.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     class Context;
 
@@ -36,11 +36,11 @@ namespace sssr
     {
     public:
         reflection_error();
-        reflection_error(SssrStatus error);
-        reflection_error(Context& context, SssrStatus error);
-        reflection_error(Context& context, SssrStatus error, char const* format, ...);
+        reflection_error(FfxSssrStatus error);
+        reflection_error(Context& context, FfxSssrStatus error);
+        reflection_error(Context& context, FfxSssrStatus error, char const* format, ...);
 
         // The error code for this exception.
-        SssrStatus error_;
+        FfxSssrStatus error_;
     };
 }

@@ -21,10 +21,10 @@ THE SOFTWARE.
 ********************************************************************/
 #include "sampler_d3d12.h"
 
-namespace sssr
+namespace ffx_sssr
 {
     /**
-        The constructor for the SamplerD3D12 class.
+        The constructor for the BlueNoiseSamplerD3D12 class.
     */
     BlueNoiseSamplerD3D12::BlueNoiseSamplerD3D12()
         : sobol_buffer_(nullptr)
@@ -34,7 +34,7 @@ namespace sssr
     }
 
     /**
-        The constructor for the SamplerD3D12 class.
+        The constructor for the BlueNoiseSamplerD3D12 class.
 
         \param other The sampler to be moved.
     */
@@ -49,7 +49,7 @@ namespace sssr
     }
 
     /**
-        The destructor for the SamplerD3D12 class.
+        The destructor for the BlueNoiseSamplerD3D12 class.
     */
     BlueNoiseSamplerD3D12::~BlueNoiseSamplerD3D12()
     {
