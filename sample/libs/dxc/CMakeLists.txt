@@ -1,0 +1,5 @@
+project (DXC)
+
+add_library(${PROJECT_NAME} SHARED IMPORTED GLOBAL)
+
+set_property(TARGET ${PROJECT_NAME} PROPERTY IMPORTED_IMPLIB dxcompiler.lib)

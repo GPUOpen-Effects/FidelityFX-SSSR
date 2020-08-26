@@ -25,6 +25,10 @@ THE SOFTWARE.
 #include <string>
 #include <vector>
 
+#if FFX_SSSR_DUMP_SHADERS
+#include <fstream>
+#endif // FFX_SSSR_DUMP_SHADERS
+
 #include "reflection_error.h"
 #include "utils.h"
 
@@ -196,6 +200,19 @@ namespace ffx_sssr
         FFX_SSSR_ASSERT(dxc_program != nullptr);
         dxc_result->Release();
 
+#if FFX_SSSR_DUMP_SHADERS
+        IDxcBlobEncoding* disasm;
+        HRESULT hr = dxc_compiler_->Disassemble(dxc_program, &disasm);
+        if (SUCCEEDED(hr))
+        {
+            std::wstring path = shader_name + std::wstring(L".dxil.disasm");
+            std::ofstream filestream(path.c_str());
+            filestream.write((const char*)disasm->GetBufferPointer(), disasm->GetBufferSize());
+            filestream.close();
+            disasm->Release();
+        }
+#endif // FFX_SSSR_DUMP_SHADERS
+
         // Retrieve the shader bytecode
         shader.BytecodeLength = dxc_program->GetBufferSize();
         auto const shader_bytecode = malloc(shader.BytecodeLength);
@@ -203,6 +220,13 @@ namespace ffx_sssr
         memcpy(shader_bytecode, dxc_program->GetBufferPointer(), shader.BytecodeLength);
         shader.pShaderBytecode = shader_bytecode;
         dxc_program->Release();
+
+#if FFX_SSSR_DUMP_SHADERS
+        std::wstring path = shader_name + std::wstring(L".dxil");
+        std::ofstream filestream(path.c_str(), std::ios::binary | std::ios::out);
+        filestream.write((const char*)shader.pShaderBytecode, shader.BytecodeLength);
+        filestream.close();
+#endif // FFX_SSSR_DUMP_SHADERS
 
         return shader;
     }

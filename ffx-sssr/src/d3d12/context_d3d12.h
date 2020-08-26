@@ -21,7 +21,7 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-#include <map>
+#include <array>
 #include <d3d12.h>
 #include <dxcapi.use.h>
 
@@ -54,8 +54,6 @@ namespace ffx_sssr
             kShader_SpatialResolve,
             kShader_TemporalResolve,
             kShader_EAWResolve,
-            kShader_EAWResolve_Stride_2,
-            kShader_EAWResolve_Stride_4,
 
             kShader_Count
         };
@@ -87,22 +85,43 @@ namespace ffx_sssr
         friend class ReflectionViewD3D12;
 
         /**
-            The ShaderKey class allows to look up a specific shader for a given set of switches.
+            The ShaderPass class holds the data for an individual shader pass.
         */
-        class ShaderKey
+        class ShaderPass
         {
+            FFX_SSSR_NON_COPYABLE(ShaderPass);
+
         public:
-            inline ShaderKey();
-            inline ShaderKey(Shader shader);
-            inline ShaderKey(Shader shader, std::uint64_t switches);
+            inline ShaderPass();
+            inline ~ShaderPass();
 
-            inline bool operator <(ShaderKey const& other) const;
+            inline operator bool() const;
 
-            // The shader to be used.
-            Shader shader_;
-            // The set of switches to be used.
-            std::uint64_t switches_;
+            inline ShaderPass(ShaderPass&& other) noexcept;
+            inline ShaderPass& operator =(ShaderPass&& other) noexcept;
+
+            inline void SafeRelease();
+
+            // The pipeline state object.
+            ID3D12PipelineState* pipeline_state_;
+            // The root signature to be used.
+            ID3D12RootSignature* root_signature_;
+            // The number of descriptors in the root signature.
+            std::uint32_t descriptor_count_;
         };
+
+        void CompileShaders(FfxSssrCreateContextInfo const& create_context_info);
+        void CreateRootSignatures();
+        void CreatePipelineStates();
+
+        const ShaderPass& GetTileClassificationPass() const;
+        const ShaderPass& GetIndirectArgsPass() const;
+        const ShaderPass& GetIntersectionPass() const;
+        const ShaderPass& GetSpatialDenoisingPass() const;
+        const ShaderPass& GetTemporalDenoisingPass() const;
+        const ShaderPass& GetEawDenoisingPass() const;
+
+        ID3D12CommandSignature* GetIndirectDispatchCommandSignature();
 
         bool AllocateSRVBuffer(std::size_t buffer_size, ID3D12Resource** resource, D3D12_RESOURCE_STATES initial_resource_state, wchar_t const* resource_name = nullptr) const;
         bool AllocateUAVBuffer(std::size_t buffer_size, ID3D12Resource** resource, D3D12_RESOURCE_STATES initial_resource_state, wchar_t const* resource_name = nullptr) const;
@@ -113,7 +132,7 @@ namespace ffx_sssr
         // The device to be used.
         ID3D12Device* device_;
         // The compiled reflections shaders.
-        std::map<ShaderKey, ShaderD3D12> shaders_;
+        std::array<ShaderD3D12, kShader_Count> shaders_;
         // The compiler to be used for building the Direct3D12 shaders.
         ShaderCompilerD3D12 shader_compiler_;
         // The Blue Noise sampler optimized for 1 sample per pixel.
@@ -126,6 +145,22 @@ namespace ffx_sssr
         UploadBufferD3D12 upload_buffer_;
         // The array of reflection views to be resolved.
         SparseArray<ReflectionViewD3D12> reflection_views_;
+
+        // The shader pass that classifies tiles.
+        ShaderPass tile_classification_pass_;
+        // The shader pass that prepares the indirect arguments.
+        ShaderPass indirect_args_pass_;
+        // The shader pass intersecting reflection rays with the depth buffer.
+        ShaderPass intersection_pass_;
+        // The shader pass that does spatial denoising.
+        ShaderPass spatial_denoising_pass_;
+        // The shader pass that does temporal denoising.
+        ShaderPass temporal_denoising_pass_;
+        // The shader pass that does the second spatial denoising.
+        ShaderPass eaw_denoising_pass_;
+
+        // The command signature for the indirect dispatches.
+        ID3D12CommandSignature* indirect_dispatch_command_signature_;
     };
 }
 

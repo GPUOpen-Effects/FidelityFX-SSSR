@@ -23,18 +23,17 @@ THE SOFTWARE.
 #ifndef FFX_SSSR_SPATIAL_RESOLVE
 #define FFX_SSSR_SPATIAL_RESOLVE
 
-Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>        g_depth_buffer  : register(t0);
-Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>      g_normal        : register(t1);
-Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>    g_roughness     : register(t2);
+// In:
+[[vk::binding(0, 1)]] Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer     : register(t0);
+[[vk::binding(1, 1)]] Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT> g_normal         : register(t1);
+[[vk::binding(2, 1)]] Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness    : register(t2);
+[[vk::binding(3, 1)]] Texture2D<float4> g_intersection_result                     : register(t3); // reflection colors at the end of the intersect pass. 
+[[vk::binding(4, 1)]] Texture2D<float> g_has_ray                                  : register(t4);
+[[vk::binding(5, 1)]] Buffer<uint> g_tile_list                                    : register(t5);
 
-SamplerState g_linear_sampler                                   : register(s0);
-
-RWTexture2D<float4> g_spatially_denoised_reflections            : register(u0);
-RWTexture2D<float>  g_ray_lengths                               : register(u1);
-RWTexture2D<float4> g_intersection_result                       : register(u2); // Reflection colors at the end of the intersect pass. 
-RWTexture2D<float>  g_has_ray                                   : register(u3);
-RWBuffer<uint>      g_tile_list                                 : register(u4);
-
+// Out:
+[[vk::binding(6, 1)]] RWTexture2D<float4> g_spatially_denoised_reflections        : register(u0);
+[[vk::binding(7, 1)]] RWTexture2D<float> g_ray_lengths                            : register(u1);
 
 // Only really need 16x16 but 17x17 avoids bank conflicts.
 groupshared uint g_shared_0[17][17];

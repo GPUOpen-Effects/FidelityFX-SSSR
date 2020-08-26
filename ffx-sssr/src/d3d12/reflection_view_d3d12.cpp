@@ -31,86 +31,6 @@ THE SOFTWARE.
 #include "ffx_sssr_d3d12.h"
 #include "descriptor_heap_d3d12.h"
 
-namespace
-{
-    /**
-        Initializes the descriptor range.
-
-        \param range_type The type of the descriptor range.
-        \param num_descriptors The number of descriptors in the range.
-        \param base_shader_register The base descriptor for the range in shader code.
-        \return The resulting descriptor range.
-    */
-    inline D3D12_DESCRIPTOR_RANGE InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE range_type, std::uint32_t num_descriptors, std::uint32_t base_shader_register)
-    {
-        D3D12_DESCRIPTOR_RANGE descriptor_range = {};
-        descriptor_range.RangeType = range_type;
-        descriptor_range.NumDescriptors = num_descriptors;
-        descriptor_range.BaseShaderRegister = base_shader_register;
-        descriptor_range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-        return descriptor_range;
-    }
-
-    /**
-        Initializes the root parameter as descriptor table.
-
-        \param num_descriptor_ranges The number of descriptor ranges for this parameter.
-        \param descriptor_ranges The array of descriptor ranges for this parameter.
-        \return The resulting root parameter.
-    */
-    inline D3D12_ROOT_PARAMETER InitAsDescriptorTable(std::uint32_t num_descriptor_ranges, D3D12_DESCRIPTOR_RANGE const* descriptor_ranges)
-    {
-        D3D12_ROOT_PARAMETER root_parameter = {};
-        root_parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        root_parameter.DescriptorTable.NumDescriptorRanges = num_descriptor_ranges;
-        root_parameter.DescriptorTable.pDescriptorRanges = descriptor_ranges;
-        root_parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // CS
-        return root_parameter;
-    }
-
-    /**
-        Initializes the root parameter as constant buffer view.
-
-        \param shader_register The slot of this constant buffer view.
-        \return The resulting root parameter.
-    */
-    inline D3D12_ROOT_PARAMETER InitAsConstantBufferView(std::uint32_t shader_register)
-    {
-        D3D12_ROOT_PARAMETER root_parameter = {};
-        root_parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-        root_parameter.Descriptor.RegisterSpace = 0;
-        root_parameter.Descriptor.ShaderRegister = shader_register;
-        root_parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // CS
-        return root_parameter;
-    }
-
-
-    /**
-        Initializes a linear sampler for a static sampler description.
-
-        \param shader_register The slot of this sampler.
-        \return The resulting sampler description.
-    */
-    inline D3D12_STATIC_SAMPLER_DESC InitLinearSampler(std::uint32_t shader_register)
-    {
-        D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
-        samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
-        samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-        samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-        samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-        samplerDesc.MinLOD = 0.0f;
-        samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-        samplerDesc.MipLODBias = 0;
-        samplerDesc.MaxAnisotropy = 1;
-        samplerDesc.ShaderRegister = shader_register;
-        samplerDesc.RegisterSpace = 0;
-        samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL; // Compute
-        return samplerDesc;
-    }
-}
-
 namespace ffx_sssr
 {
     /**
@@ -121,23 +41,7 @@ namespace ffx_sssr
         , height_(0)
         , flags_(0)
         , descriptor_heap_cbv_srv_uav_(nullptr)
-        , tile_classification_pass_()
-        , descriptor_count_tile_classification_(0)
-        , indirect_args_pass_()
-        , descriptor_count_indirect_args_(0)
-        , intersection_pass_()
-        , descriptor_count_intersection_(0)
-        , spatial_denoising_pass_()
-        , descriptor_count_spatial_(0)
-        , temporal_denoising_pass_()
-        , descriptor_count_temporal_(0)
-        , eaw_denoising_pass_()
-        , eaw_stride_2_denoising_pass_()
-        , eaw_stride_4_denoising_pass_()
-        , descriptor_count_eaw_(0)
-        , descriptor_count_eaw_stride_2_(0)
-        , descriptor_count_eaw_stride_4_(0)
-        , indirect_dispatch_command_signature_(nullptr)
+        , descriptor_heap_samplers_(nullptr)
         , resource_heap_(nullptr)
         , tile_list_(nullptr)
         , tile_counter_(nullptr)
@@ -148,9 +52,6 @@ namespace ffx_sssr
         , temporal_denoiser_result_()
         , ray_lengths_(nullptr)
         , temporal_variance_(nullptr)
-        , sobol_buffer_()
-        , ranking_tile_buffer_()
-        , scrambling_tile_buffer_()
         , tile_classification_elapsed_time_(0)
         , intersection_elapsed_time_(0)
         , denoising_elapsed_time_(0)
@@ -165,8 +66,7 @@ namespace ffx_sssr
         , spatial_denoising_descriptor_table_()
         , temporal_denoising_descriptor_table_()
         , eaw_denoising_descriptor_table_()
-        , eaw_stride_2_denoising_descriptor_table_()
-        , eaw_stride_4_denoising_descriptor_table_()
+        , sampler_descriptor_table_()
         , prev_view_projection_()
     {
     }
@@ -180,15 +80,8 @@ namespace ffx_sssr
         : width_(other.width_)
         , height_(other.height_)
         , flags_(other.flags_)
-        , indirect_args_pass_(std::move(other.indirect_args_pass_))
-        , tile_classification_pass_(std::move(other.tile_classification_pass_))
-        , intersection_pass_(std::move(other.intersection_pass_))
-        , spatial_denoising_pass_(std::move(other.spatial_denoising_pass_))
-        , temporal_denoising_pass_(std::move(other.temporal_denoising_pass_))
-        , eaw_denoising_pass_(std::move(other.eaw_denoising_pass_))
-        , eaw_stride_2_denoising_pass_(std::move(other.eaw_stride_2_denoising_pass_))
-        , eaw_stride_4_denoising_pass_(std::move(other.eaw_stride_4_denoising_pass_))
         , descriptor_heap_cbv_srv_uav_(other.descriptor_heap_cbv_srv_uav_)
+        , descriptor_heap_samplers_(other.descriptor_heap_samplers_)
         , tile_classification_elapsed_time_(other.tile_classification_elapsed_time_)
         , intersection_elapsed_time_(other.intersection_elapsed_time_)
         , denoising_elapsed_time_(other.denoising_elapsed_time_)
@@ -196,18 +89,6 @@ namespace ffx_sssr
         , timestamp_query_buffer_(other.timestamp_query_buffer_)
         , timestamp_queries_(std::move(other.timestamp_queries_))
         , timestamp_queries_index_(other.timestamp_queries_index_)
-        , sobol_buffer_(other.sobol_buffer_)
-        , ranking_tile_buffer_(other.ranking_tile_buffer_)
-        , scrambling_tile_buffer_(other.scrambling_tile_buffer_)
-        , descriptor_count_tile_classification_(other.descriptor_count_tile_classification_)
-        , descriptor_count_indirect_args_(other.descriptor_count_indirect_args_)
-        , descriptor_count_intersection_(other.descriptor_count_intersection_)
-        , descriptor_count_spatial_(other.descriptor_count_spatial_)
-        , descriptor_count_temporal_(other.descriptor_count_temporal_)
-        , descriptor_count_eaw_(other.descriptor_count_eaw_)
-        , descriptor_count_eaw_stride_2_(other.descriptor_count_eaw_stride_2_)
-        , descriptor_count_eaw_stride_4_(other.descriptor_count_eaw_stride_4_)
-        , indirect_dispatch_command_signature_(other.indirect_dispatch_command_signature_)
         , resource_heap_(other.resource_heap_)
         , tile_list_(other.tile_list_)
         , tile_counter_(other.tile_counter_)
@@ -223,6 +104,7 @@ namespace ffx_sssr
         other.timestamp_query_heap_ = nullptr;
         other.timestamp_query_buffer_ = nullptr;
         other.descriptor_heap_cbv_srv_uav_ = nullptr;
+        other.descriptor_heap_samplers_ = nullptr;
 
         for (int i = 0; i < 2; ++i)
         {
@@ -233,29 +115,10 @@ namespace ffx_sssr
             spatial_denoising_descriptor_table_[i] = other.spatial_denoising_descriptor_table_[i];
             temporal_denoising_descriptor_table_[i] = other.temporal_denoising_descriptor_table_[i];
             eaw_denoising_descriptor_table_[i] = other.eaw_denoising_descriptor_table_[i];
-            eaw_stride_2_denoising_descriptor_table_[i] = other.eaw_stride_2_denoising_descriptor_table_[i];
-            eaw_stride_4_denoising_descriptor_table_[i] = other.eaw_stride_4_denoising_descriptor_table_[i];
-
             other.temporal_denoiser_result_[i] = nullptr;
         }
+        sampler_descriptor_table_ = other.sampler_descriptor_table_;
 
-        other.tile_classification_pass_.root_signature_ = nullptr;
-        other.tile_classification_pass_.pipeline_state_ = nullptr;
-        other.indirect_args_pass_.root_signature_ = nullptr;
-        other.indirect_args_pass_.pipeline_state_ = nullptr;
-        other.intersection_pass_.root_signature_ = nullptr;
-        other.intersection_pass_.pipeline_state_ = nullptr;
-        other.spatial_denoising_pass_.root_signature_ = nullptr;
-        other.spatial_denoising_pass_.pipeline_state_ = nullptr;
-        other.temporal_denoising_pass_.root_signature_ = nullptr;
-        other.temporal_denoising_pass_.pipeline_state_ = nullptr;
-        other.eaw_denoising_pass_.root_signature_ = nullptr;
-        other.eaw_denoising_pass_.pipeline_state_ = nullptr;
-        other.eaw_stride_2_denoising_pass_.root_signature_ = nullptr;
-        other.eaw_stride_2_denoising_pass_.pipeline_state_ = nullptr;
-        other.eaw_stride_4_denoising_pass_.root_signature_ = nullptr;
-        other.eaw_stride_4_denoising_pass_.pipeline_state_ = nullptr;
-        other.indirect_dispatch_command_signature_ = nullptr;
         other.resource_heap_ = nullptr;
         other.tile_list_ = nullptr;
         other.tile_counter_ = nullptr;
@@ -290,24 +153,9 @@ namespace ffx_sssr
             width_ = other.width_;
             height_ = other.height_;
             flags_ = other.flags_;
-            indirect_args_pass_.root_signature_ = other.indirect_args_pass_.root_signature_;
-            indirect_args_pass_.pipeline_state_ = other.indirect_args_pass_.pipeline_state_;
-            tile_classification_pass_.root_signature_ = other.tile_classification_pass_.root_signature_;
-            tile_classification_pass_.pipeline_state_ = other.tile_classification_pass_.pipeline_state_;
-            intersection_pass_.root_signature_ = other.intersection_pass_.root_signature_;
-            intersection_pass_.pipeline_state_ = other.intersection_pass_.pipeline_state_;
-            spatial_denoising_pass_.root_signature_ = other.spatial_denoising_pass_.root_signature_;
-            spatial_denoising_pass_.pipeline_state_ = other.spatial_denoising_pass_.pipeline_state_;
-            temporal_denoising_pass_.root_signature_ = other.temporal_denoising_pass_.root_signature_;
-            temporal_denoising_pass_.pipeline_state_ = other.temporal_denoising_pass_.pipeline_state_;
-            eaw_denoising_pass_.root_signature_ = other.eaw_denoising_pass_.root_signature_;
-            eaw_denoising_pass_.pipeline_state_ = other.eaw_denoising_pass_.pipeline_state_;
-            eaw_stride_2_denoising_pass_.root_signature_ = other.eaw_stride_2_denoising_pass_.root_signature_;
-            eaw_stride_2_denoising_pass_.pipeline_state_ = other.eaw_stride_2_denoising_pass_.pipeline_state_;
-            eaw_stride_4_denoising_pass_.root_signature_ = other.eaw_stride_4_denoising_pass_.root_signature_;
-            eaw_stride_4_denoising_pass_.pipeline_state_ = other.eaw_stride_4_denoising_pass_.pipeline_state_;
 
             descriptor_heap_cbv_srv_uav_ = other.descriptor_heap_cbv_srv_uav_;
+            descriptor_heap_samplers_ = other.descriptor_heap_samplers_;
             tile_classification_elapsed_time_ = other.tile_classification_elapsed_time_;
             intersection_elapsed_time_ = other.intersection_elapsed_time_;
             denoising_elapsed_time_ = other.denoising_elapsed_time_;
@@ -315,18 +163,6 @@ namespace ffx_sssr
             timestamp_query_buffer_ = other.timestamp_query_buffer_;
             timestamp_queries_ = other.timestamp_queries_;;
             timestamp_queries_index_ = other.timestamp_queries_index_;
-            sobol_buffer_ = other.sobol_buffer_;
-            ranking_tile_buffer_ = other.ranking_tile_buffer_;
-            scrambling_tile_buffer_ = other.scrambling_tile_buffer_;
-            descriptor_count_tile_classification_ = other.descriptor_count_tile_classification_;
-            descriptor_count_indirect_args_ = other.descriptor_count_indirect_args_;
-            descriptor_count_intersection_ = other.descriptor_count_intersection_;
-            descriptor_count_spatial_ = other.descriptor_count_spatial_;
-            descriptor_count_temporal_ = other.descriptor_count_temporal_;
-            descriptor_count_eaw_ = other.descriptor_count_eaw_;
-            descriptor_count_eaw_stride_2_ = other.descriptor_count_eaw_stride_2_;
-            descriptor_count_eaw_stride_4_ = other.descriptor_count_eaw_stride_4_;
-            indirect_dispatch_command_signature_ = other.indirect_dispatch_command_signature_;
             resource_heap_ = other.resource_heap_;
             tile_list_ = other.tile_list_;
             tile_counter_ = other.tile_counter_;
@@ -342,6 +178,7 @@ namespace ffx_sssr
             other.timestamp_query_heap_ = nullptr;
             other.timestamp_query_buffer_ = nullptr;
             other.descriptor_heap_cbv_srv_uav_ = nullptr;
+            other.descriptor_heap_samplers_ = nullptr;
 
             for (int i = 0; i < 2; ++i)
             {
@@ -352,29 +189,11 @@ namespace ffx_sssr
                 spatial_denoising_descriptor_table_[i] = other.spatial_denoising_descriptor_table_[i];
                 temporal_denoising_descriptor_table_[i] = other.temporal_denoising_descriptor_table_[i];
                 eaw_denoising_descriptor_table_[i] = other.eaw_denoising_descriptor_table_[i];
-                eaw_stride_2_denoising_descriptor_table_[i] = other.eaw_stride_2_denoising_descriptor_table_[i];
-                eaw_stride_4_denoising_descriptor_table_[i] = other.eaw_stride_4_denoising_descriptor_table_[i];
 
                 other.temporal_denoiser_result_[i] = nullptr;
             }
+            sampler_descriptor_table_ = other.sampler_descriptor_table_;
 
-            other.tile_classification_pass_.root_signature_ = nullptr;
-            other.tile_classification_pass_.pipeline_state_ = nullptr;
-            other.indirect_args_pass_.root_signature_ = nullptr;
-            other.indirect_args_pass_.pipeline_state_ = nullptr;
-            other.intersection_pass_.root_signature_ = nullptr;
-            other.intersection_pass_.pipeline_state_ = nullptr;
-            other.spatial_denoising_pass_.root_signature_ = nullptr;
-            other.spatial_denoising_pass_.pipeline_state_ = nullptr;
-            other.temporal_denoising_pass_.root_signature_ = nullptr;
-            other.temporal_denoising_pass_.pipeline_state_ = nullptr;
-            other.eaw_denoising_pass_.root_signature_ = nullptr;
-            other.eaw_denoising_pass_.pipeline_state_ = nullptr;
-            other.eaw_stride_2_denoising_pass_.root_signature_ = nullptr;
-            other.eaw_stride_2_denoising_pass_.pipeline_state_ = nullptr;
-            other.eaw_stride_4_denoising_pass_.root_signature_ = nullptr;
-            other.eaw_stride_4_denoising_pass_.pipeline_state_ = nullptr;
-            other.indirect_dispatch_command_signature_ = nullptr;
             other.resource_heap_ = nullptr;
             other.tile_list_ = nullptr;
             other.tile_counter_ = nullptr;
@@ -419,15 +238,13 @@ namespace ffx_sssr
         scene_format_ = create_reflection_view_info.pD3D12CreateReflectionViewInfo->sceneFormat;
 
         // Create reflection view resources
-        CreateRootSignature(context, create_reflection_view_info);
-        CreatePipelineState(context);
         CreateDescriptorHeaps(context);
 
         // Create tile classification-related buffers
         {
             ID3D12Device * device = context.GetContextD3D12()->GetDevice();
 
-            uint32_t num_tiles = RoundedDivide(width_ * height_, 64u);
+            uint32_t num_tiles = RoundedDivide(width_, 8u) * RoundedDivide(height_, 8u);
             uint32_t num_pixels = width_ * height_;
 
             uint32_t tile_list_element_count = num_tiles;
@@ -516,26 +333,7 @@ namespace ffx_sssr
             intersection_pass_indirect_args_->SetName(L"SSSR Intersect Indirect Args");
             denoiser_pass_indirect_args_->SetName(L"SSSR Denoiser Indirect Args");
         }
-        // Create command signature for indirect arguments 
-        {
-            D3D12_INDIRECT_ARGUMENT_DESC dispatch = {};
-            dispatch.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH;
-
-            ID3D12Device * device = context.GetContextD3D12()->GetDevice();
-            D3D12_COMMAND_SIGNATURE_DESC desc = {};
-            desc.ByteStride = sizeof(D3D12_DISPATCH_ARGUMENTS);
-            desc.NodeMask = 0;
-            desc.NumArgumentDescs = 1;
-            desc.pArgumentDescs = &dispatch;
-
-            HRESULT hr;
-            hr = device->CreateCommandSignature(&desc, nullptr, IID_PPV_ARGS(&indirect_dispatch_command_signature_));
-            if (!SUCCEEDED(hr))
-            {
-                throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create command signature for indirect dispatch.");
-            }
-        }
-
+        
         // Create denoising-related resources
         {
             auto CreateCommittedResource = [this, &context](
@@ -589,35 +387,33 @@ namespace ffx_sssr
             temporal_variance_->SetName(L"SSSR Temporal Variance");
         }
 
+        ContextD3D12* d3d12_context = context.GetContextD3D12();
+
         // Setup the descriptor tables
         {
+            descriptor_heap_samplers_->AllocateStaticDescriptor(sampler_descriptor_table_, 1);
+
             // Suballocate descriptor heap for descriptor tables
             for (int i = 0; i < 2; ++i)
             {
                 DescriptorD3D12 table;
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_tile_classification_);
+                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, d3d12_context->GetTileClassificationPass().descriptor_count_);
                 tile_classification_descriptor_table_[i] = table;
 
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_indirect_args_);
+                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, d3d12_context->GetIndirectArgsPass().descriptor_count_);
                 indirect_args_descriptor_table_[i] = table;
 
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_intersection_);
+                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, d3d12_context->GetIntersectionPass().descriptor_count_);
                 intersection_descriptor_table_[i] = table;
 
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_spatial_);
+                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, d3d12_context->GetSpatialDenoisingPass().descriptor_count_);
                 spatial_denoising_descriptor_table_[i] = table;
 
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_temporal_);
+                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, d3d12_context->GetTemporalDenoisingPass().descriptor_count_);
                 temporal_denoising_descriptor_table_[i] = table;
 
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_eaw_);
+                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, d3d12_context->GetEawDenoisingPass().descriptor_count_);
                 eaw_denoising_descriptor_table_[i] = table;
-
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_eaw_stride_2_);
-                eaw_stride_2_denoising_descriptor_table_[i] = table;
-
-                descriptor_heap_cbv_srv_uav_->AllocateStaticDescriptor(table, descriptor_count_eaw_stride_4_);
-                eaw_stride_4_denoising_descriptor_table_[i] = table;
             }
 
             ID3D12Device * device = context.GetContextD3D12()->GetDevice();
@@ -632,6 +428,7 @@ namespace ffx_sssr
             D3D12_CPU_DESCRIPTOR_HANDLE roughness_history_buffer_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->roughnessHistoryBufferSRV;
             D3D12_CPU_DESCRIPTOR_HANDLE environment_map_srv = create_reflection_view_info.pD3D12CreateReflectionViewInfo->environmentMapSRV;
             D3D12_CPU_DESCRIPTOR_HANDLE output_buffer_uav = create_reflection_view_info.pD3D12CreateReflectionViewInfo->reflectionViewUAV;
+            const D3D12_SAMPLER_DESC* environment_map_sampler_desc = create_reflection_view_info.pD3D12CreateReflectionViewInfo->pEnvironmentMapSamplerDesc;
 
             D3D12_CPU_DESCRIPTOR_HANDLE normal_buffers[] = { normal_buffer_srv, normal_history_buffer_srv };
             D3D12_CPU_DESCRIPTOR_HANDLE roughness_buffers[] = { roughness_buffer_srv, roughness_history_buffer_srv };
@@ -688,9 +485,10 @@ namespace ffx_sssr
             };
 
             // Place the descriptors
+            device->CreateSampler(environment_map_sampler_desc, sampler_descriptor_table_.GetCPUDescriptor(0)); // g_environment_map_sampler
             for (int i = 0; i < 2; ++i)
             {
-                uint32_t num_tiles = RoundedDivide(width_ * height_, 64u);
+                uint32_t num_tiles = RoundedDivide(width_, 8u) * RoundedDivide(height_, 8u);
                 uint32_t num_pixels = width_ * height_;
 
                 // Tile Classifier pass
@@ -746,10 +544,11 @@ namespace ffx_sssr
                     shader_resource_view_desc.Buffer.NumElements = static_cast<UINT>(sampler.scrambling_tile_buffer_->GetDesc().Width / sizeof(std::int32_t));
                     shader_resource_view_desc.Buffer.StructureByteStride = static_cast<UINT>(sizeof(std::int32_t));
                     device->CreateShaderResourceView(sampler.scrambling_tile_buffer_, &shader_resource_view_desc, table.GetCPUDescriptor(offset++)); // g_scrambling_tile_buffer
+
+                    device->CreateShaderResourceView(ray_list_, &SRV_Buffer(num_pixels), table.GetCPUDescriptor(offset++)); // g_ray_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_intersection_result
                     device->CreateUnorderedAccessView(ray_lengths_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
-                    device->CreateUnorderedAccessView(ray_list_, nullptr, &UAV_Buffer(num_pixels), table.GetCPUDescriptor(offset++)); // g_ray_list
                 }
 
                 // Spatial denoising pass
@@ -759,11 +558,11 @@ namespace ffx_sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
+                    device->CreateShaderResourceView(temporal_denoiser_result_[i], &SRV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_intersection_result
+                    device->CreateShaderResourceView(temporal_variance_, &SRV_Tex2D(DXGI_FORMAT_R8_UNORM), table.GetCPUDescriptor(offset++)); // g_has_ray
+                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_spatially_denoised_reflections
                     device->CreateUnorderedAccessView(ray_lengths_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
-                    device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_intersection_result
-                    device->CreateUnorderedAccessView(temporal_variance_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R8_UNORM), table.GetCPUDescriptor(offset++)); // g_has_ray
-                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
 
                 // Temporal denoising pass
@@ -776,12 +575,12 @@ namespace ffx_sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[1 - i] : roughness_history_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness_history
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), motion_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_motion_vectors
+                    device->CreateShaderResourceView(temporal_denoiser_result_[1 - i], &SRV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections_history
+                    device->CreateShaderResourceView(ray_lengths_, &SRV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
+                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_spatially_denoised_reflections
                     device->CreateUnorderedAccessView(temporal_variance_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R8_UNORM), table.GetCPUDescriptor(offset++)); // g_temporal_variance
-                    device->CreateUnorderedAccessView(temporal_denoiser_result_[1 - i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections_history
-                    device->CreateUnorderedAccessView(ray_lengths_, nullptr, &UAV_Tex2D(DXGI_FORMAT_R16_FLOAT), table.GetCPUDescriptor(offset++)); // g_ray_lengths
-                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
 
                 // EAW denoising pass
@@ -791,33 +590,9 @@ namespace ffx_sssr
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
+                    device->CreateShaderResourceView(tile_list_, &SRV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                     device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
                     device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
-                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
-                }
-
-                // EAW Stride 2 denoising pass (the same as the EAW pass, but input and output buffers flipped)
-                {
-                    DescriptorD3D12 table = eaw_stride_2_denoising_descriptor_table_[i];
-                    uint32_t offset = 0;
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
-                    device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
-                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
-                }
-
-                // EAW Stride 4 denoising pass (the very same as the EAW pass)
-                {
-                    DescriptorD3D12 table = eaw_stride_4_denoising_descriptor_table_[i];
-                    uint32_t offset = 0;
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_normal ? normal_buffers[i] : normal_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_normal
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), ping_pong_roughness ? roughness_buffers[i] : roughness_buffer_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_roughness
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), depth_hierarchy_srv, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_depth_buffer
-                    device->CreateUnorderedAccessView(temporal_denoiser_result_[i], nullptr, &UAV_Tex2D(scene_format_), table.GetCPUDescriptor(offset++)); // g_temporally_denoised_reflections
-                    device->CopyDescriptorsSimple(1, table.GetCPUDescriptor(offset++), output_buffer_uav, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV); // g_denoised_reflections
-                    device->CreateUnorderedAccessView(tile_list_, nullptr, &UAV_Buffer(num_tiles), table.GetCPUDescriptor(offset++)); // g_tile_list
                 }
             }
         }
@@ -859,25 +634,18 @@ namespace ffx_sssr
     */
     void ReflectionViewD3D12::Destroy()
     {
-        intersection_pass_.SafeRelease();
-        spatial_denoising_pass_.SafeRelease();
-        temporal_denoising_pass_.SafeRelease();
-        tile_classification_pass_.SafeRelease();
-        indirect_args_pass_.SafeRelease();
-        eaw_denoising_pass_.SafeRelease();
-        eaw_stride_2_denoising_pass_.SafeRelease();
-        eaw_stride_4_denoising_pass_.SafeRelease();
-
         if (descriptor_heap_cbv_srv_uav_)
             delete descriptor_heap_cbv_srv_uav_;
         descriptor_heap_cbv_srv_uav_ = nullptr;
 
+        if (descriptor_heap_samplers_)
+            delete descriptor_heap_samplers_;
+        descriptor_heap_samplers_ = nullptr;
 
 #define FFX_SSSR_SAFE_RELEASE(x)\
         if(x) { x->Release(); }\
         x = nullptr;
 
-        FFX_SSSR_SAFE_RELEASE(indirect_dispatch_command_signature_);
         FFX_SSSR_SAFE_RELEASE(timestamp_query_heap_);
         FFX_SSSR_SAFE_RELEASE(timestamp_query_buffer_);
         FFX_SSSR_SAFE_RELEASE(temporal_denoiser_result_[0]);
@@ -898,220 +666,31 @@ namespace ffx_sssr
     }
 
     /**
-        Creates the reflection view root signature.
-
-        \param context The context to be used.
-    */
-    void ReflectionViewD3D12::CreateRootSignature(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info)
-    {
-        auto CreateRootSignature = [&context, &create_reflection_view_info](
-            ShaderPass& pass
-            , const LPCWSTR name
-            , std::uint32_t num_descriptor_ranges
-            , D3D12_DESCRIPTOR_RANGE const* descriptor_ranges
-            ) {
-
-            D3D12_ROOT_PARAMETER root[] = {
-                InitAsDescriptorTable(num_descriptor_ranges, descriptor_ranges),
-                InitAsConstantBufferView(0)
-            };
-
-            D3D12_STATIC_SAMPLER_DESC environment_sampler = *create_reflection_view_info.pD3D12CreateReflectionViewInfo->pEnvironmentMapSamplerDesc;
-            environment_sampler.RegisterSpace = 0;
-            environment_sampler.ShaderRegister = 1;
-            environment_sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-
-            D3D12_STATIC_SAMPLER_DESC sampler_descs[] = { InitLinearSampler(0), environment_sampler }; // g_linear_sampler
-
-            D3D12_ROOT_SIGNATURE_DESC rs_desc = {};
-            rs_desc.NumParameters = FFX_SSSR_ARRAY_SIZE(root);
-            rs_desc.pParameters = root;
-            rs_desc.NumStaticSamplers = FFX_SSSR_ARRAY_SIZE(sampler_descs);
-            rs_desc.pStaticSamplers = sampler_descs;
-
-            HRESULT hr;
-            ID3DBlob* rs, *rsError;
-            hr = D3D12SerializeRootSignature(&rs_desc, D3D_ROOT_SIGNATURE_VERSION_1, &rs, &rsError);
-            if (FAILED(hr))
-            {
-                if (rsError)
-                {
-                    std::string const error_message(static_cast<char const*>(rsError->GetBufferPointer()));
-                    rsError->Release();
-                    throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to serialize root signature:\r\n> %s", error_message.c_str());
-                }
-                else
-                {
-                    throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Unable to serialize root signature");
-                }
-            }
-
-            hr = context.GetContextD3D12()->GetDevice()->CreateRootSignature(0, rs->GetBufferPointer(), rs->GetBufferSize(), IID_PPV_ARGS(&pass.root_signature_));
-            rs->Release();
-            if (FAILED(hr))
-            {
-                throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create root signature.");
-            }
-
-            pass.root_signature_->SetName(name);
-        };
-
-        // Assemble the shader pass for tile classification
-        {
-            D3D12_DESCRIPTOR_RANGE ranges[] = {
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_roughness
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_tile_list
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_ray_list
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_tile_counter
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_ray_counter
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4), // g_temporally_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 5), // g_temporally_denoised_reflections_history
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 6), // g_ray_lengths
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 7), // g_temporal_variance
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 8), // g_denoised_reflections
-            };
-            CreateRootSignature(tile_classification_pass_, L"SSSR Tile Classification Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_tile_classification_ = FFX_SSSR_ARRAY_SIZE(ranges);
-        }
-
-        // Assemble the shader pass that prepares the indirect arguments
-        {
-            D3D12_DESCRIPTOR_RANGE ranges[] = {
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_tile_counter
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_ray_counter
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_intersect_args
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_denoiser_args
-            };
-            CreateRootSignature(indirect_args_pass_, L"SSSR Indirect Arguments Pass Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_indirect_args_ = FFX_SSSR_ARRAY_SIZE(ranges);
-        }
-
-        // Assemble the shader pass for intersecting reflection rays with the depth buffer
-        {
-            D3D12_DESCRIPTOR_RANGE ranges[] = {
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_lit_scene
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1), // g_depth_buffer_hierarchy
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2), // g_normal
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3), // g_roughness
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4), // g_environment_map
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5), // g_sobol_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 6), // g_ranking_tile_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 7), // g_scrambling_tile_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_intersection_result
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_ray_lengths
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_ray_list
-            };
-            CreateRootSignature(intersection_pass_, L"SSSR Depth Buffer Intersection Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_intersection_ = FFX_SSSR_ARRAY_SIZE(ranges);
-        }
-
-        // Assemble the shader pass for spatial resolve
-        {
-            D3D12_DESCRIPTOR_RANGE ranges[] = {
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_depth_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1), // g_normal
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2), // g_roughness
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_spatially_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_ray_lengths
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_intersection_result
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_has_ray
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4), // g_tile_list
-            };
-            CreateRootSignature(spatial_denoising_pass_, L"SSSR Spatial Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_spatial_ = FFX_SSSR_ARRAY_SIZE(ranges);
-        }
-
-        // Assemble the shader pass for temporal resolve
-        {
-            D3D12_DESCRIPTOR_RANGE ranges[] = {
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_normal
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1), // g_roughness
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2), // g_normal_history
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 3), // g_roughness_history
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 4), // g_depth_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 5), // g_motion_vectors
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_temporally_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_spatially_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_temporal_variance
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 3), // g_temporally_denoised_reflections_history
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 4), // g_ray_lengths
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 5), // g_tile_list
-            };
-            CreateRootSignature(temporal_denoising_pass_, L"SSSR Temporal Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_temporal_ = FFX_SSSR_ARRAY_SIZE(ranges);
-        }
-
-        // Assemble the shader pass for EAW resolve
-        {
-            D3D12_DESCRIPTOR_RANGE ranges[] = {
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0), // g_normal
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1), // g_roughness
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2), // g_depth_buffer
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0), // g_temporally_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 1), // g_denoised_reflections
-                InitDescriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 2), // g_tile_list
-            };
-            CreateRootSignature(eaw_denoising_pass_, L"SSSR EAW Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_eaw_ = FFX_SSSR_ARRAY_SIZE(ranges);
-
-            CreateRootSignature(eaw_stride_2_denoising_pass_, L"SSSR EAW Stride 2 Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_eaw_stride_2_ = FFX_SSSR_ARRAY_SIZE(ranges);
-
-            CreateRootSignature(eaw_stride_4_denoising_pass_, L"SSSR EAW Stride 4 Resolve Root Signature", FFX_SSSR_ARRAY_SIZE(ranges), ranges);
-            descriptor_count_eaw_stride_4_ = FFX_SSSR_ARRAY_SIZE(ranges);
-
-        }
-    }
-
-    /**
-        Creates the reflection view pipeline state.
-
-        \param context The context to be used.
-    */
-    void ReflectionViewD3D12::CreatePipelineState(Context& context)
-    {
-        auto Compile = [&context](ShaderPass& pass, ContextD3D12::Shader shader, const LPCWSTR name) {
-            FFX_SSSR_ASSERT(pass.root_signature_ != nullptr);
-
-            // Create the pipeline state object
-            D3D12_COMPUTE_PIPELINE_STATE_DESC pipeline_state_desc = {};
-            pipeline_state_desc.pRootSignature = pass.root_signature_;
-            pipeline_state_desc.CS = context.GetContextD3D12()->GetShader(shader);
-
-            HRESULT hr = context.GetContextD3D12()->GetDevice()->CreateComputePipelineState(&pipeline_state_desc,
-                IID_PPV_ARGS(&pass.pipeline_state_));
-            if (!SUCCEEDED(hr))
-            {
-                throw reflection_error(context, FFX_SSSR_STATUS_INTERNAL_ERROR, "Failed to create compute pipeline state");
-            }
-
-            pass.pipeline_state_->SetName(name);
-        };
-
-        Compile(tile_classification_pass_, ContextD3D12::kShader_TileClassification, L"SSSR Tile Classification Pipeline");
-        Compile(indirect_args_pass_, ContextD3D12::kShader_IndirectArguments, L"SSSR Indirect Arguments Pipeline");
-        Compile(intersection_pass_, ContextD3D12::kShader_Intersection, L"SSSR Intersect Pipeline");
-        Compile(spatial_denoising_pass_, ContextD3D12::kShader_SpatialResolve, L"SSSR Spatial Resolve Pipeline");
-        Compile(temporal_denoising_pass_, ContextD3D12::kShader_TemporalResolve, L"SSSR Temporal Resolve Pipeline");
-        Compile(eaw_denoising_pass_, ContextD3D12::kShader_EAWResolve, L"SSSR EAW Resolve Pipeline");
-        Compile(eaw_stride_2_denoising_pass_, ContextD3D12::kShader_EAWResolve_Stride_2, L"SSSR EAW Stride 2 Resolve Pipeline");
-        Compile(eaw_stride_4_denoising_pass_, ContextD3D12::kShader_EAWResolve_Stride_4, L"SSSR EAW Stride 4 Resolve Pipeline");
-    }
-
-    /**
         Creates the descriptor heaps.
 
         \param context The context to be used.
     */
     void ReflectionViewD3D12::CreateDescriptorHeaps(Context& context)
     {
+        ContextD3D12* d3d12_context = context.GetContextD3D12();
+
         FFX_SSSR_ASSERT(!descriptor_heap_cbv_srv_uav_);
+        FFX_SSSR_ASSERT(!descriptor_heap_samplers_);
+
         descriptor_heap_cbv_srv_uav_ = new DescriptorHeapD3D12(context);
         FFX_SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ != nullptr);
-
-        std::uint32_t descriptor_count = descriptor_count_tile_classification_ + descriptor_count_indirect_args_ + descriptor_count_intersection_ + descriptor_count_spatial_ + descriptor_count_temporal_ + descriptor_count_eaw_ + descriptor_count_eaw_stride_2_ + descriptor_count_eaw_stride_4_;
+        std::uint32_t descriptor_count
+            = d3d12_context->GetTileClassificationPass().descriptor_count_
+            + d3d12_context->GetIndirectArgsPass().descriptor_count_
+            + d3d12_context->GetIntersectionPass().descriptor_count_
+            + d3d12_context->GetSpatialDenoisingPass().descriptor_count_
+            + d3d12_context->GetTemporalDenoisingPass().descriptor_count_
+            + d3d12_context->GetEawDenoisingPass().descriptor_count_;
         descriptor_heap_cbv_srv_uav_->Create(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 2 * descriptor_count, 0u);
+
+        descriptor_heap_samplers_ = new DescriptorHeapD3D12(context);
+        FFX_SSSR_ASSERT(descriptor_heap_samplers_ != nullptr);
+        descriptor_heap_samplers_->Create(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, 1, 0u); // g_environment_map_sampler
     }
 
     /**
@@ -1149,17 +728,8 @@ namespace ffx_sssr
         // Get hold of the command list for recording
         FFX_SSSR_ASSERT(resolve_reflection_view_info.pD3D12CommandEncodeInfo);
         auto const command_list = ContextD3D12::GetCommandList(context, resolve_reflection_view_info.pD3D12CommandEncodeInfo->pCommandList);
-        FFX_SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ && command_list);
-        FFX_SSSR_ASSERT(tile_classification_pass_);
-        FFX_SSSR_ASSERT(indirect_args_pass_);
-        FFX_SSSR_ASSERT(intersection_pass_);
-        FFX_SSSR_ASSERT(spatial_denoising_pass_);
-        FFX_SSSR_ASSERT(temporal_denoising_pass_);
-        FFX_SSSR_ASSERT(eaw_denoising_pass_);
-        FFX_SSSR_ASSERT(eaw_stride_2_denoising_pass_);
-        FFX_SSSR_ASSERT(eaw_stride_4_denoising_pass_);
+        FFX_SSSR_ASSERT(descriptor_heap_cbv_srv_uav_ && descriptor_heap_samplers_ && command_list);
         FFX_SSSR_ASSERT(resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_1 || resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_2 || resolve_reflection_view_info.samplesPerQuad == FFX_SSSR_RAY_SAMPLES_PER_QUAD_4);
-        FFX_SSSR_ASSERT(resolve_reflection_view_info.eawPassCount == FFX_SSSR_EAW_PASS_COUNT_1 || resolve_reflection_view_info.eawPassCount == FFX_SSSR_EAW_PASS_COUNT_3);
 
         // Query timestamp value prior to resolving the reflection view
         if ((flags_ & FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS) != 0)
@@ -1268,8 +838,8 @@ namespace ffx_sssr
         prev_view_projection_ = view_projection;
         
         std::uint32_t current_frame = context.GetFrameIndex() & 1u;
-        ID3D12DescriptorHeap *descriptorHeaps[] = { descriptor_heap_cbv_srv_uav_->GetDescriptorHeap() };
-        command_list->SetDescriptorHeaps(1, descriptorHeaps);
+        ID3D12DescriptorHeap *descriptor_heaps[] = { descriptor_heap_cbv_srv_uav_->GetDescriptorHeap(), descriptor_heap_samplers_->GetDescriptorHeap() };
+        command_list->SetDescriptorHeaps(FFX_SSSR_ARRAY_SIZE(descriptor_heaps), descriptor_heaps);
 
         ID3D12Resource * cb_resource = upload_buffer.GetResource();
         size_t offset = upload_buffer.GetOffset(pass_data);
@@ -1294,12 +864,14 @@ namespace ffx_sssr
             return barrier;
         };
 
+        ContextD3D12* d3d12_context = context.GetContextD3D12();
+
         // Tile Classification pass
         {
-            command_list->SetComputeRootSignature(tile_classification_pass_.root_signature_);
+            command_list->SetComputeRootSignature(d3d12_context->GetTileClassificationPass().root_signature_);
             command_list->SetComputeRootDescriptorTable(0, tile_classification_descriptor_table_[current_frame].GetGPUDescriptor());
             command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-            command_list->SetPipelineState(tile_classification_pass_.pipeline_state_);
+            command_list->SetPipelineState(d3d12_context->GetTileClassificationPass().pipeline_state_);
             uint32_t dim_x = RoundedDivide(width_, 8u);
             uint32_t dim_y = RoundedDivide(height_, 8u);
             command_list->Dispatch(dim_x, dim_y, 1);
@@ -1316,10 +888,10 @@ namespace ffx_sssr
 
         // Indirect Arguments pass
         {
-            command_list->SetComputeRootSignature(indirect_args_pass_.root_signature_);
+            command_list->SetComputeRootSignature(d3d12_context->GetIndirectArgsPass().root_signature_);
             command_list->SetComputeRootDescriptorTable(0, indirect_args_descriptor_table_[current_frame].GetGPUDescriptor());
             command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-            command_list->SetPipelineState(indirect_args_pass_.pipeline_state_);
+            command_list->SetPipelineState(d3d12_context->GetIndirectArgsPass().pipeline_state_);
             command_list->Dispatch(1, 1, 1);
         }
 
@@ -1348,11 +920,12 @@ namespace ffx_sssr
 
         // Intersection pass
         {
-            command_list->SetComputeRootSignature(intersection_pass_.root_signature_);
+            command_list->SetComputeRootSignature(d3d12_context->GetIntersectionPass().root_signature_);
             command_list->SetComputeRootDescriptorTable(0, intersection_descriptor_table_[current_frame].GetGPUDescriptor());
             command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-            command_list->SetPipelineState(intersection_pass_.pipeline_state_);
-            command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, intersection_pass_indirect_args_, 0, nullptr, 0);
+            command_list->SetComputeRootDescriptorTable(2, sampler_descriptor_table_.GetGPUDescriptor());
+            command_list->SetPipelineState(d3d12_context->GetIntersectionPass().pipeline_state_);
+            command_list->ExecuteIndirect(d3d12_context->GetIndirectDispatchCommandSignature(), 1, intersection_pass_indirect_args_, 0, nullptr, 0);
         }
 
         // Query the amount of time spent in the intersection pass
@@ -1376,11 +949,11 @@ namespace ffx_sssr
 
             // Spatial denoiser passes
             {
-                command_list->SetComputeRootSignature(spatial_denoising_pass_.root_signature_);
+                command_list->SetComputeRootSignature(d3d12_context->GetSpatialDenoisingPass().root_signature_);
                 command_list->SetComputeRootDescriptorTable(0, spatial_denoising_descriptor_table_[current_frame].GetGPUDescriptor());
                 command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-                command_list->SetPipelineState(spatial_denoising_pass_.pipeline_state_);
-                command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
+                command_list->SetPipelineState(d3d12_context->GetSpatialDenoisingPass().pipeline_state_);
+                command_list->ExecuteIndirect(d3d12_context->GetIndirectDispatchCommandSignature(), 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
             }
 
             // Ensure that the spatial denoising pass finished. We don't have the resource for the final result available, thus we have to wait for any UAV access to finish.
@@ -1388,11 +961,11 @@ namespace ffx_sssr
 
             // Temporal denoiser passes
             {
-                command_list->SetComputeRootSignature(temporal_denoising_pass_.root_signature_);
+                command_list->SetComputeRootSignature(d3d12_context->GetTemporalDenoisingPass().root_signature_);
                 command_list->SetComputeRootDescriptorTable(0, temporal_denoising_descriptor_table_[current_frame].GetGPUDescriptor());
                 command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-                command_list->SetPipelineState(temporal_denoising_pass_.pipeline_state_);
-                command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
+                command_list->SetPipelineState(d3d12_context->GetTemporalDenoisingPass().pipeline_state_);
+                command_list->ExecuteIndirect(d3d12_context->GetIndirectDispatchCommandSignature(), 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
             }
 
             // Ensure that the temporal denoising pass finished
@@ -1400,33 +973,11 @@ namespace ffx_sssr
 
             // EAW denoiser passes
             {
-                command_list->SetComputeRootSignature(eaw_denoising_pass_.root_signature_);
+                command_list->SetComputeRootSignature(d3d12_context->GetEawDenoisingPass().root_signature_);
                 command_list->SetComputeRootDescriptorTable(0, eaw_denoising_descriptor_table_[current_frame].GetGPUDescriptor());
                 command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-                command_list->SetPipelineState(eaw_denoising_pass_.pipeline_state_);
-                command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
-            }
-
-            if (resolve_reflection_view_info.eawPassCount == FFX_SSSR_EAW_PASS_COUNT_3)
-            {
-                // Ensure that the prior EAW pass has finished
-                command_list->ResourceBarrier(1, &UAVBarrier(nullptr));
-
-                // EAW Stride 2 denoiser pass
-                command_list->SetComputeRootSignature(eaw_stride_2_denoising_pass_.root_signature_);
-                command_list->SetComputeRootDescriptorTable(0, eaw_stride_2_denoising_descriptor_table_[current_frame].GetGPUDescriptor());
-                command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-                command_list->SetPipelineState(eaw_stride_2_denoising_pass_.pipeline_state_);
-                command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
-
-                command_list->ResourceBarrier(1, &UAVBarrier(temporal_denoiser_result_[current_frame]));
-
-                // EAW Stride 4 denoiser pass
-                command_list->SetComputeRootSignature(eaw_stride_4_denoising_pass_.root_signature_);
-                command_list->SetComputeRootDescriptorTable(0, eaw_stride_4_denoising_descriptor_table_[current_frame].GetGPUDescriptor());
-                command_list->SetComputeRootConstantBufferView(1, cb_resource->GetGPUVirtualAddress() + offset);
-                command_list->SetPipelineState(eaw_stride_4_denoising_pass_.pipeline_state_);
-                command_list->ExecuteIndirect(indirect_dispatch_command_signature_, 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
+                command_list->SetPipelineState(d3d12_context->GetEawDenoisingPass().pipeline_state_);
+                command_list->ExecuteIndirect(d3d12_context->GetIndirectDispatchCommandSignature(), 1, denoiser_pass_indirect_args_, 0, nullptr, 0);
             }
 
             // Query the amount of time spent in the denoiser passes

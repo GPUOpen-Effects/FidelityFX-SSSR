@@ -25,7 +25,7 @@ THE SOFTWARE.
 
 #define FFX_SSSR_MAKE_VERSION(a,b,c) (((a) << 22) | ((b) << 12) | (c))
 
-#define FFX_SSSR_API_VERSION FFX_SSSR_MAKE_VERSION(1, 0, 0)
+#define FFX_SSSR_API_VERSION FFX_SSSR_MAKE_VERSION(1, 1, 0)
 
 #define FFX_SSSR_STATIC_LIBRARY
 
@@ -60,6 +60,9 @@ FFX_SSSR_DEFINE_HANDLE(FfxSssrReflectionView)
 typedef struct FfxSssrD3D12CreateContextInfo FfxSssrD3D12CreateContextInfo;
 typedef struct FfxSssrD3D12CreateReflectionViewInfo FfxSssrD3D12CreateReflectionViewInfo;
 typedef struct FfxSssrD3D12CommandEncodeInfo FfxSssrD3D12CommandEncodeInfo;
+typedef struct FfxSssrVkCreateContextInfo FfxSssrVkCreateContextInfo;
+typedef struct FfxSssrVkCreateReflectionViewInfo FfxSssrVkCreateReflectionViewInfo;
+typedef struct FfxSssrVkCommandEncodeInfo FfxSssrVkCommandEncodeInfo;
 
 /**
     The return codes for the API functions.
@@ -83,15 +86,6 @@ enum FfxSssrRaySamplesPerQuad
     FFX_SSSR_RAY_SAMPLES_PER_QUAD_1,
     FFX_SSSR_RAY_SAMPLES_PER_QUAD_2,
     FFX_SSSR_RAY_SAMPLES_PER_QUAD_4
-};
-
-/** 
-    The number of passes for Edge-aware �-trous wavelet filtering.
-*/
-enum FfxSssrEawPassCount
-{
-    FFX_SSSR_EAW_PASS_COUNT_1,
-    FFX_SSSR_EAW_PASS_COUNT_3
 };
 
 /**
@@ -154,6 +148,7 @@ typedef struct FfxSssrCreateContextInfo
     union
     {
         const FfxSssrD3D12CreateContextInfo* pD3D12CreateContextInfo;
+        const FfxSssrVkCreateContextInfo* pVkCreateContextInfo;
     };
 } FfxSssrCreateContextInfo;
 
@@ -168,6 +163,7 @@ typedef struct FfxSssrCreateReflectionViewInfo
     union
     {
         const FfxSssrD3D12CreateReflectionViewInfo* pD3D12CreateReflectionViewInfo;
+        const FfxSssrVkCreateReflectionViewInfo* pVkCreateReflectionViewInfo;
     };
 } FfxSssrCreateReflectionViewInfo;
 
@@ -183,11 +179,11 @@ typedef struct FfxSssrResolveReflectionViewInfo
     uint32_t minTraversalOccupancy; ///< Minimum number of threads per wave to keep the intersection kernel running.
     float depthBufferThickness; ///< Unit in view space. Any intersections further behind the depth buffer are rejected as invalid hits.
     FfxSssrRaySamplesPerQuad samplesPerQuad; ///< Number of samples per 4 pixels in denoised regions. Mirror reflections are not affected by this.
-    FfxSssrEawPassCount eawPassCount; ///< Number of EAW passes.
     float roughnessThreshold; ///< Shoot reflection rays for roughness values that are lower than this threshold.
     union
     {
         const FfxSssrD3D12CommandEncodeInfo* pD3D12CommandEncodeInfo; ///< A pointer to the Direct3D12 command encoding parameters.
+        const FfxSssrVkCommandEncodeInfo* pVkCommandEncodeInfo; ///< A pointer to the Vulkan command encoding parameters.
     };
 } FfxSssrResolveReflectionViewInfo;
 

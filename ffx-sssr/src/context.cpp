@@ -21,10 +21,15 @@ THE SOFTWARE.
 ********************************************************************/
 #include "context.h"
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
     #include "ffx_sssr_d3d12.h"
     #include "d3d12/context_d3d12.h"
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+    #include "ffx_sssr_vk.h"
+    #include "vk/context_vk.h"
+#endif // FFX_SSSR_VK
 
 namespace ffx_sssr
 {
@@ -44,7 +49,7 @@ namespace ffx_sssr
         , reflection_view_projection_matrices_(create_context_info.maxReflectionViewCount)
     {
         // Create platform-specific context(s)
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         if (create_context_info.pD3D12CreateContextInfo)
         {
             if (!create_context_info.pD3D12CreateContextInfo->pDevice)
@@ -54,7 +59,19 @@ namespace ffx_sssr
             
             context_d3d12_ = std::make_unique<ContextD3D12>(*this, create_context_info);
         }
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        if (create_context_info.pVkCreateContextInfo)
+        {
+            if (!create_context_info.pVkCreateContextInfo->device)
+            {
+                throw reflection_error(*this, FFX_SSSR_STATUS_INVALID_VALUE, "device must not be VK_NULL_HANDLE, cannot create Vulkan context");
+            }
+
+            context_vk_ = std::make_unique<ContextVK>(*this, create_context_info);
+        }
+#endif // FFX_SSSR_VK
     }
 
     /**
@@ -85,10 +102,15 @@ namespace ffx_sssr
                 reflection_view_view_matrices_.Erase(ID(object_id));
                 reflection_view_projection_matrices_.Erase(ID(object_id));
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
                 if (context_d3d12_)
                     context_d3d12_->reflection_views_.Erase(ID(object_id));
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+                if (context_vk_)
+                    context_vk_->reflection_views_.Erase(ID(object_id));
+#endif // FFX_SSSR_VK
 
                 reflection_view_id_dispenser_.FreeId(object_id);
             }
@@ -139,10 +161,15 @@ namespace ffx_sssr
     */
     void Context::CreateReflectionView(std::uint64_t reflection_view_id, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info)
     {
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         if (context_d3d12_ && create_reflection_view_info.pD3D12CreateReflectionViewInfo)
             context_d3d12_->CreateReflectionView(reflection_view_id, create_reflection_view_info);
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        if (context_vk_ && create_reflection_view_info.pVkCreateReflectionViewInfo)
+            context_vk_->CreateReflectionView(reflection_view_id, create_reflection_view_info);
+#endif // FFX_SSSR_VK
     }
 
     /**
@@ -156,9 +183,13 @@ namespace ffx_sssr
         FFX_SSSR_ASSERT(reflection_view_view_matrices_.At(ID(reflection_view_id)));   // not created properly?
         FFX_SSSR_ASSERT(reflection_view_projection_matrices_.At(ID(reflection_view_id)));
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         context_d3d12_->ResolveReflectionView(reflection_view_id, resolve_reflection_view_info);
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        context_vk_->ResolveReflectionView(reflection_view_id, resolve_reflection_view_info);
+#endif // FFX_SSSR_VK
     }
 
     /**
@@ -171,10 +202,15 @@ namespace ffx_sssr
     {
         FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         if (context_d3d12_)
             context_d3d12_->GetReflectionViewTileClassificationElapsedTime(reflection_view_id, elapsed_time);
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        if (context_vk_)
+            context_vk_->GetReflectionViewTileClassificationElapsedTime(reflection_view_id, elapsed_time);
+#endif // FFX_SSSR_VK
     }
 
     /**
@@ -187,10 +223,15 @@ namespace ffx_sssr
     {
         FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         if (context_d3d12_)
             context_d3d12_->GetReflectionViewIntersectionElapsedTime(reflection_view_id, elapsed_time);
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        if (context_vk_)
+            context_vk_->GetReflectionViewIntersectionElapsedTime(reflection_view_id, elapsed_time);
+#endif // FFX_SSSR_VK
     }
 
     /**
@@ -203,9 +244,14 @@ namespace ffx_sssr
     {
         FFX_SSSR_ASSERT(IsOfType<kResourceType_ReflectionView>(reflection_view_id) && IsObjectValid(reflection_view_id));
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         if (context_d3d12_)
             context_d3d12_->GetReflectionViewDenoisingElapsedTime(reflection_view_id, elapsed_time);
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        if (context_vk_)
+            context_vk_->GetReflectionViewDenoisingElapsedTime(reflection_view_id, elapsed_time);
+#endif // FFX_SSSR_VK
     }
 }

@@ -43,17 +43,19 @@ class SssrSample : public FrameworkWindows
 {
 public:
     SssrSample(LPCSTR name);
-    void OnCreate(HWND hWnd);
-    void OnDestroy();
-    void OnRender();
-    bool OnEvent(MSG msg);
-    void OnResize(uint32_t Width, uint32_t Height);
+    void OnCreate(HWND hWnd) override;
+    void OnDestroy() override;
+    void OnRender() override;
+    bool OnEvent(MSG msg) override;
+    void OnResize(uint32_t Width, uint32_t Height) override;
+    virtual void OnParseCommandLine(LPSTR lpCmdLine, uint32_t* pWidth, uint32_t* pHeight, bool* pbFullScreen) override;
+
     void SetFullScreen(bool fullscreen);
 
 private:
-    bool LoadConfiguration();
     void BuildUI();
     void HandleInput();
+    void LoadScene(int sceneIndex);
 
     Device                      m_Device;
     SwapChain                   m_Swapchain;

@@ -49,7 +49,7 @@ namespace ffx_sssr
         \param context The context to be used.
         \param error The error code for this exception.
     */
-    reflection_error::reflection_error(Context& context, FfxSssrStatus error)
+    reflection_error::reflection_error(const Context& context, FfxSssrStatus error)
         : error_(error)
     {
         (void)&context;
@@ -63,7 +63,7 @@ namespace ffx_sssr
         \param format The format for the error message.
         \param ... The content of the error message.
     */
-    reflection_error::reflection_error(Context& context, FfxSssrStatus error, char const* format, ...)
+    reflection_error::reflection_error(const Context& context, FfxSssrStatus error, char const* format, ...)
         : error_(error)
     {
         va_list args;

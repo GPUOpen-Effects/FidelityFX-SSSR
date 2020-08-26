@@ -23,17 +23,19 @@ THE SOFTWARE.
 #ifndef FFX_SSSR_CLASSIFY_TILES
 #define FFX_SSSR_CLASSIFY_TILES
 
-Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness                    : register(t0);
+// In:
+[[vk::binding(0, 1)]] Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness            : register(t0);
 
-RWBuffer<uint>                  g_tile_list                                 : register(u0);
-RWBuffer<uint>                  g_ray_list                                  : register(u1);
-globallycoherent RWBuffer<uint> g_tile_counter                              : register(u2);
-globallycoherent RWBuffer<uint> g_ray_counter                               : register(u3);
-RWTexture2D<float4>             g_temporally_denoised_reflections           : register(u4);
-RWTexture2D<float4>             g_temporally_denoised_reflections_history   : register(u5);
-RWTexture2D<float>              g_ray_lengths                               : register(u6);
-RWTexture2D<float>              g_temporal_variance                         : register(u7);
-RWTexture2D<float4>             g_denoised_reflections                      : register(u8); 
+// Out:
+[[vk::binding(1, 1)]] RWBuffer<uint> g_tile_list                                          : register(u0);
+[[vk::binding(2, 1)]] RWBuffer<uint> g_ray_list                                           : register(u1);
+[[vk::binding(3, 1)]] globallycoherent RWBuffer<uint> g_tile_counter                      : register(u2);
+[[vk::binding(4, 1)]] globallycoherent RWBuffer<uint> g_ray_counter                       : register(u3);
+[[vk::binding(5, 1)]] RWTexture2D<float4> g_temporally_denoised_reflections               : register(u4);
+[[vk::binding(6, 1)]] RWTexture2D<float4> g_temporally_denoised_reflections_history       : register(u5);
+[[vk::binding(7, 1)]] RWTexture2D<float> g_ray_lengths                                    : register(u6);
+[[vk::binding(8, 1)]] RWTexture2D<float> g_temporal_variance                              : register(u7);
+[[vk::binding(9, 1)]] RWTexture2D<float4> g_denoised_reflections                          : register(u8); 
 
 groupshared uint g_ray_count;
 groupshared uint g_ray_base_index;
@@ -51,9 +53,9 @@ void main(uint2 did : SV_DispatchThreadID, uint group_index : SV_GroupIndex)
 
     // Disable offscreen pixels
     bool needs_ray = !(did.x >= screen_size.x || did.y >= screen_size.y);
-    
+
     // Dont shoot a ray on very rough surfaces.
-    float roughness = FfxSssrUnpackRoughness(g_roughness.Load(int3(did, 0)));    
+    float roughness = FfxSssrUnpackRoughness(g_roughness.Load(int3(did, 0)));
     needs_ray = needs_ray && IsGlossy(roughness);
 
     // Also we dont need to run the denoiser on mirror reflections.
@@ -107,7 +109,7 @@ void main(uint2 did : SV_DispatchThreadID, uint group_index : SV_GroupIndex)
         uint tile_index;
         uint ray_base_index = 0;
 
-        InterlockedAdd(g_tile_counter[0], denoise_count, tile_index); 
+        InterlockedAdd(g_tile_counter[0], denoise_count, tile_index);
         InterlockedAdd(g_ray_counter[0], ray_count, ray_base_index);
 
         int cleaned_index = must_denoise ? tile_index : -1;

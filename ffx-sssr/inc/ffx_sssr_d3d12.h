@@ -47,7 +47,7 @@ typedef struct FfxSssrD3D12CreateReflectionViewInfo
     D3D12_CPU_DESCRIPTOR_HANDLE normalHistoryBufferSRV; ///< Last frames normalBufferSRV. The descriptor handle must be allocated on a heap allowing CPU reads.
     D3D12_CPU_DESCRIPTOR_HANDLE roughnessHistoryBufferSRV; ///< Last frames roughnessHistoryBufferSRV. The descriptor handle must be allocated on a heap allowing CPU reads.
     D3D12_CPU_DESCRIPTOR_HANDLE environmentMapSRV; ///< Environment cube map serving as a fallback for ray misses. The descriptor handle must be allocated on a heap allowing CPU reads.
-    const D3D12_STATIC_SAMPLER_DESC * pEnvironmentMapSamplerDesc; ///< Description for the environment map sampler.
+    const D3D12_SAMPLER_DESC * pEnvironmentMapSamplerDesc; ///< Description for the environment map sampler.
     D3D12_CPU_DESCRIPTOR_HANDLE reflectionViewUAV; ///< The fully resolved reflection view. Make sure to synchronize for UAV writes. The descriptor handle must be allocated on a heap allowing CPU reads.
 } FfxSssrD3D12CreateReflectionViewInfo;
 

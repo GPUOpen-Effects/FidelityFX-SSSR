@@ -23,15 +23,15 @@ THE SOFTWARE.
 #ifndef FFX_SSSR_EAW_RESOLVE
 #define FFX_SSSR_EAW_RESOLVE
 
-Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>      g_normal            : register(t0);
-Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>    g_roughness         : register(t1);
-Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>        g_depth_buffer      : register(t2);
+// In:
+[[vk::binding(0, 1)]] Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT> g_normal         : register(t0);
+[[vk::binding(1, 1)]] Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness    : register(t1);
+[[vk::binding(2, 1)]] Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer     : register(t2);
+[[vk::binding(3, 1)]] Buffer<uint> g_tile_list                                    : register(t3);
 
-SamplerState g_linear_sampler                                       : register(s0);
-
-RWTexture2D<float4> g_temporally_denoised_reflections               : register(u0);
-RWTexture2D<float4> g_denoised_reflections                          : register(u1); // Will hold the reflection colors at the end of the resolve pass. 
-RWBuffer<uint>      g_tile_list                                     : register(u2);
+// Out:
+[[vk::binding(4, 1)]] RWTexture2D<float4> g_temporally_denoised_reflections       : register(u0);
+[[vk::binding(5, 1)]] RWTexture2D<float4> g_denoised_reflections                  : register(u1); // will hold the reflection colors at the end of the resolve pass. 
 
 groupshared uint g_shared_0[12][12];
 groupshared uint g_shared_1[12][12];

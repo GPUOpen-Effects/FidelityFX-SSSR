@@ -23,21 +23,21 @@ THE SOFTWARE.
 #ifndef FFX_SSSR_TEMPORAL_RESOLVE
 #define FFX_SSSR_TEMPORAL_RESOLVE
 
-Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>          g_normal                : register(t0);
-Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>        g_roughness             : register(t1);
-Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>          g_normal_history        : register(t2);
-Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>        g_roughness_history     : register(t3);
-Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>            g_depth_buffer          : register(t4);
-Texture2D<FFX_SSSR_MOTION_VECTOR_TEXTURE_FORMAT>    g_motion_vectors        : register(t5);
+// In:
+[[vk::binding(0, 1)]] Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT> g_normal               : register(t0);
+[[vk::binding(1, 1)]] Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness          : register(t1);
+[[vk::binding(2, 1)]] Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT> g_normal_history       : register(t2);
+[[vk::binding(3, 1)]] Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness_history  : register(t3);
+[[vk::binding(4, 1)]] Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer           : register(t4);
+[[vk::binding(5, 1)]] Texture2D<FFX_SSSR_MOTION_VECTOR_TEXTURE_FORMAT> g_motion_vectors : register(t5);
+[[vk::binding(6, 1)]] Texture2D<float4> g_temporally_denoised_reflections_history       : register(t6); // reflection colors at the end of the temporal resolve pass of the previous frame.
+[[vk::binding(7, 1)]] Texture2D<float> g_ray_lengths                                    : register(t7);
+[[vk::binding(8, 1)]] Buffer<uint> g_tile_list                                          : register(t8);
 
-SamplerState g_linear_sampler                                               : register(s0);
-
-RWTexture2D<float4> g_temporally_denoised_reflections                       : register(u0);
-RWTexture2D<float4> g_spatially_denoised_reflections                        : register(u1);
-RWTexture2D<float>  g_temporal_variance                                     : register(u2);
-RWTexture2D<float4> g_temporally_denoised_reflections_history               : register(u3); // Reflection colors at the end of the temporal resolve pass of the previous frame.
-RWTexture2D<float>  g_ray_lengths                                           : register(u4);
-RWBuffer<uint>      g_tile_list                                             : register(u5);
+// Out:
+[[vk::binding(9, 1)]] RWTexture2D<float4> g_temporally_denoised_reflections             : register(u0);
+[[vk::binding(10, 1)]] RWTexture2D<float4> g_spatially_denoised_reflections             : register(u1); // Technically still an input, but we have to keep it as UAV
+[[vk::binding(11, 1)]] RWTexture2D<float>  g_temporal_variance                          : register(u2); 
 
 // From "Temporal Reprojection Anti-Aliasing"
 // https://github.com/playdeadgames/temporal
@@ -115,7 +115,7 @@ float3 EstimateStdDeviation(int2 did, RWTexture2D<float4> tex)
     return sqrt(max(color_std, 0.0));
 }
 
-float3 SampleRadiance(int2 texel_coords, RWTexture2D<float4> tex)
+float3 SampleRadiance(int2 texel_coords, Texture2D<float4> tex)
 {
     return tex.Load(int3(texel_coords, 0)).xyz;
 }
@@ -183,8 +183,8 @@ float4 ResolveScreenspaceReflections(int2 did, float2 uv, uint2 image_size, floa
 {
     float3 normal = LoadNormal(did, g_normal);
     float3 radiance = g_spatially_denoised_reflections.Load(did).xyz;
-    float3 radiance_history = g_temporally_denoised_reflections_history.Load(did).xyz;
-    float ray_length = g_ray_lengths.Load(did);
+    float3 radiance_history = g_temporally_denoised_reflections_history.Load(int3(did, 0)).xyz;
+    float ray_length = g_ray_lengths.Load(int3(did, 0));
 
     // And clip it to the local neighborhood
     float2 motion_vector = FfxSssrUnpackMotionVectors(g_motion_vectors.Load(int3(did, 0)));

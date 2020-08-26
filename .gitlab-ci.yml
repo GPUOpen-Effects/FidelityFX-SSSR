@@ -18,6 +18,18 @@ build_dx12:
       paths:
       - sample/bin/
 
+build_vk:
+  tags:
+  - windows
+  - amd64
+  stage: build
+  script:
+  - 'cmake -S sample -B sample/build/VK -G "Visual Studio 15 2017" -A x64 -DGFX_API=VK'
+  - 'cmake --build sample/build/VK --config Release'
+  artifacts:
+      paths:
+      - sample/bin/
+
 package_sample:
   tags:
   - windows
@@ -25,10 +37,13 @@ package_sample:
   stage: deploy
   dependencies:
     - build_dx12
+    - build_vk
   script:
   - echo "Packaging build"
   - echo cd .\sample\bin\ > %SampleName%_DX12.bat
   - echo start %SampleName%_DX12.exe >> %SampleName%_DX12.bat  
+  - echo cd .\sample\bin\ > %SampleName%_VK.bat
+  - echo start %SampleName%_VK.exe >> %SampleName%_VK.bat  
   artifacts:
       name: "%SampleName%-%CI_COMMIT_TAG%-%CI_COMMIT_REF_NAME%-%CI_COMMIT_SHORT_SHA%"
       paths:
@@ -39,3 +54,4 @@ package_sample:
       - sample/media/
       - docs/
       - "%SampleName%_DX12.bat"
+      - "%SampleName%_VK.bat"

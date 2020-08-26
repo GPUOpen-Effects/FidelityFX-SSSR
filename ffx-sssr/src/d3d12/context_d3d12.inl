@@ -24,50 +24,6 @@ THE SOFTWARE.
 
 namespace ffx_sssr
 {
-    /**
-        The constructor for the ShaderKey class.
-    */
-    ContextD3D12::ShaderKey::ShaderKey()
-        : shader_(kShader_Count)
-        , switches_(0ull)
-    {
-    }
-
-    /**
-        The constructor for the ShaderKey class.
-
-        \param shader The shader to be used.
-    */
-    ContextD3D12::ShaderKey::ShaderKey(Shader shader)
-        : shader_(shader)
-        , switches_(0ull)
-    {
-    }
-
-    /**
-        The constructor for the ShaderKey class.
-
-        \param shader The shader to be used.
-        \param switches The set of switches to be used.
-    */
-    ContextD3D12::ShaderKey::ShaderKey(Shader shader, std::uint64_t switches)
-        : shader_(shader)
-        , switches_(switches)
-    {
-    }
-
-    /**
-        Compares the two shader keys.
-
-        \param other The shader key to be comparing with.
-        \return true if the shader key is less than the other one.
-    */
-    bool ContextD3D12::ShaderKey::operator <(ShaderKey const& other) const
-    {
-        if (shader_ != other.shader_)
-            return (shader_ < other.shader_);
-        return switches_ < other.switches_;
-    }
 
     /**
         Gets the context.
@@ -113,16 +69,12 @@ namespace ffx_sssr
         Gets the shader.
 
         \param shader The shader to be retrieved.
-        \param switches The set of switches to be used.
         \return The requested shader.
     */
     ShaderD3D12 const& ContextD3D12::GetShader(Shader shader) const
     {
         FFX_SSSR_ASSERT(shader < kShader_Count);
-        ShaderKey const shader_key(shader, 0ull);
-        auto const it = shaders_.find(shader_key);
-        FFX_SSSR_ASSERT(it != shaders_.end());
-        return (*it).second;
+        return shaders_[shader];
     }
 
     /**
@@ -187,5 +139,87 @@ namespace ffx_sssr
         if (!command_list)
             throw reflection_error(context, FFX_SSSR_STATUS_INVALID_VALUE, "No command list was supplied, cannot encode device commands");
         return command_list;
+    }
+
+
+    /**
+        The constructor for the ShaderPass class.
+    */
+    ContextD3D12::ShaderPass::ShaderPass()
+        : pipeline_state_(nullptr)
+        , root_signature_(nullptr)
+        , descriptor_count_(0)
+    {
+    }
+
+    /**
+        The constructor for the ShaderPass class.
+
+        \param other The shader pass to be moved.
+    */
+    ContextD3D12::ShaderPass::ShaderPass(ShaderPass&& other) noexcept
+        : pipeline_state_(other.pipeline_state_)
+        , root_signature_(other.root_signature_)
+        , descriptor_count_(other.descriptor_count_)
+    {
+        other.pipeline_state_ = nullptr;
+        other.root_signature_ = nullptr;
+        other.descriptor_count_ = 0;
+    }
+
+    /**
+        The destructor for the ShaderPass class.
+    */
+    ContextD3D12::ShaderPass::~ShaderPass()
+    {
+        SafeRelease();
+    }
+
+    /**
+        Assigns the shader pass.
+
+        \param other The shader pass to be moved.
+        \return The assigned shader pass.
+    */
+    ContextD3D12::ShaderPass& ContextD3D12::ShaderPass::operator =(ShaderPass&& other) noexcept
+    {
+        if (this != &other)
+        {
+            pipeline_state_ = other.pipeline_state_;
+            root_signature_ = other.root_signature_;
+            descriptor_count_ = other.descriptor_count_;
+
+            other.pipeline_state_ = nullptr;
+            other.root_signature_ = nullptr;
+            descriptor_count_ = 0;
+        }
+
+        return *this;
+    }
+
+    /**
+        Releases the shader pass.
+    */
+    inline void ContextD3D12::ShaderPass::SafeRelease()
+    {
+        if (pipeline_state_)
+            pipeline_state_->Release();
+        pipeline_state_ = nullptr;
+
+        if (root_signature_)
+            root_signature_->Release();
+        root_signature_ = nullptr;
+
+        descriptor_count_ = 0;
+    }
+
+    /**
+        Checks whether the shader pass is valid.
+
+        \return true if the shader pass is valid, false otherwise.
+    */
+    ContextD3D12::ShaderPass::operator bool() const
+    {
+        return (pipeline_state_ && root_signature_);
     }
 }

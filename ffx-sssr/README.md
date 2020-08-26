@@ -3,7 +3,17 @@
 The **FidelityFX SSSR** library provides the means to render stochastic screen space reflections for the use in real-time applications.
 A full sample running the library can be found on the [FidelityFX SSSR GitHub page](https://github.com/GPUOpen-Effects/FidelityFX-SSSR.git).
 
-The library supports D3D12 with SM 6.0 or higher.
+The library supports D3D12 and Vulkan.
+
+## Prerequisits
+
+The library relies on [dxcompiler.dll](https://github.com/microsoft/DirectXShaderCompiler) to generate DXIL/SPIRV from HLSL at runtime.
+Use the version built for SPIRV from the [DirectXShaderCompiler GitHub repository](https://github.com/microsoft/DirectXShaderCompiler) or the one that comes with the [Vulkan SDK 1.2.141.2 (or later)](https://www.lunarg.com/vulkan-sdk/) if you are planning to use the Vulkan version of **FidelityFX SSSR**.
+
+## Device Creation
+
+Vulkan version only: The library relies on [VK_EXT_subgroup_size_control](https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VK_EXT_subgroup_size_control.html) for optimal performance on RDNA. Make sure the extension is enabled at device creation by adding `VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME` to `ppEnabledExtensionNames` if it is available.
+Also enable `subgroupSizeControl` in `VkPhysicalDeviceSubgroupSizeControlFeaturesEXT` and chain it into the `pNext` chain of `VkDeviceCreateInfo` if the extension name is available. It is fine to run **FidelityFX SSSR** if the extension is not supported.
 
 ## Context - Initialization and Shutdown
 
@@ -14,12 +24,24 @@ First the header files must be included. This is `ffx_sssr.h` for Graphics API i
 #include "ffx_sssr_d3d12.h"
 ```
 
-Then a context must be created. This usually is done only once per device.
+or `ffx_sssr_vk.h` for Vulkan specific definitions:
+
+```C++
+#include "ffx_sssr.h"
+#include "ffx_sssr_vk.h"
+```
+
+Then a context must be created. This usually is done only once per device. Depending on the preferred API, populate either  `FfxSssrD3D12CreateContextInfo` or `FfxSssrVkCreateContextInfo`.
 
 ```C++
 FfxSssrD3D12CreateContextInfo d3d12ContextInfo = {};
 d3d12ContextInfo.pDevice = myDevice;
 d3d12ContextInfo.pUploadCommandList = myCommandList;
+
+FfxSssrVkCreateContextInfo vkContextInfo = {};
+vkContextInfo.device = myDeviceHandle;
+vkContextInfo.physicalDevice = myPhysicalDeviceHandle;
+vkContextInfo.uploadCommandBuffer = myUploadCommandBufferHandle;
 
 FfxSssrLoggingCallbacks loggingCallbacks = {};
 loggingCallbacks.pUserData = myUserData;
@@ -32,10 +54,11 @@ contextInfo.frameCountBeforeMemoryReuse = myMaxFrameCountInFlight;
 contextInfo.uploadBufferSize = 8 * 1024 * 1024;
 contextInfo.pLoggingCallbacks = &loggingCallbacks;
 contextInfo.pD3D12CreateContextInfo = &d3d12ContextInfo;
+contextInfo.pVkCreateContextInfo = &vkContextInfo;
 ```
 
 The library requires certain input textures from the application to create a reflection view.
-Thus, the context requires user specified unpack functions (HLSL) to access the individual attributes. It is recommended to keep these snippets as small as possible to guarantee good performance.
+Thus, the context requires user specified unpack functions (HLSL SM 6.0) to access the individual attributes. It is recommended to keep these snippets as small as possible to achieve good performance.
 The function headers have to match in order for the shaders to compile. The `FFX_SSSR_*_TEXTURE_FORMAT` macros hold the definitions provided in the `p*TextureFormat` members of `FfxSssrCreateContextInfo`. The snippets provided below shall serve as a starting point:
 
 ```C++
@@ -61,7 +84,7 @@ if (status != FFX_SSSR_STATUS_OK) {
 }
 ```
  
-Finally, submit the command list provided to the `pUploadCommandList` member of `FfxSssrCreateContextInfoD3D12` to the queue of your choice to upload the internal resources to the GPU.
+Finally, submit the command list provided to the `pUploadCommandList` member of `FfxSssrCreateContextInfoD3D12` to the queue of your choice to upload the internal resources to the GPU. The same is required on Vulkan for the `uploadCommandBuffer` member of `FfxSssrVkCreateContextInfo`.
 
 Once there is no need to render reflections anymore the context should be destroyed to free internal resources:
 
@@ -76,7 +99,7 @@ if (status != FFX_SSSR_STATUS_OK) {
 
 Reflection views represent the abstraction for the first bounce of indirect light from reflective surfaces as seen from a given camera.
 
-`FfxSssrReflectionView` resources can be created as such:
+`FfxSssrReflectionView` resources can be created as such. Depending on the API fill either `FfxSssrD3D12CreateReflectionViewInfo` or `FfxSssrVkCreateReflectionViewInfo`:
 
 ```C++
 FfxSssrD3D12CreateReflectionViewInfo d3d12ReflectionViewInfo = {};
@@ -92,11 +115,26 @@ d3d12ReflectionViewInfo.sceneSRV;
 d3d12ReflectionViewInfo.environmentMapSRV;
 d3d12ReflectionViewInfo.pEnvironmentMapSamplerDesc;
 
+FfxSssrVkCreateReflectionViewInfo vkReflectionViewInfo = {};
+vkReflectionViewInfo.depthBufferHierarchySRV;
+vkReflectionViewInfo.motionBufferSRV;
+vkReflectionViewInfo.normalBufferSRV;
+vkReflectionViewInfo.roughnessBufferSRV;
+vkReflectionViewInfo.normalHistoryBufferSRV;
+vkReflectionViewInfo.roughnessHistoryBufferSRV;
+vkReflectionViewInfo.reflectionViewUAV;
+vkReflectionViewInfo.sceneFormat;
+vkReflectionViewInfo.sceneSRV;
+vkReflectionViewInfo.environmentMapSRV;
+vkReflectionViewInfo.environmentMapSampler;
+vkReflectionViewInfo.uploadCommandBuffer;
+
 FfxSssrCreateReflectionViewInfo reflectionViewInfo = {};
 reflectionViewInfo.flags = FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS | FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_NORMAL_BUFFERS | FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_ROUGHNESS_BUFFERS;
 reflectionViewInfo.outputWidth = width;
 reflectionViewInfo.outputHeight = height;
 reflectionViewInfo.pD3D12CreateReflectionViewInfo = &d3d12ReflectionViewInfo;
+reflectionViewInfo.pVkCreateReflectionViewInfo = &vkReflectionViewInfo;
 
 FfxSssrReflectionView myReflectionView;
 FfxSssrStatus status = ffxSssrCreateReflectionView(myContext, &reflectionViewInfo, &myReflectionView);
@@ -105,7 +143,7 @@ if (status != FFX_SSSR_STATUS_OK) {
 }
 ```
 
-All SRVs and UAVs must be allocated from a CPU accessible descriptor heap as they are copied into the descriptor tables of the library. `FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS` can be used if the application intends to query for timings later. The `FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_*` flags  should be set if the normal or roughness surfaces are written in an alternating fashion. Don't set the flags if the surfaces are copied each frame.
+On D3D12 all SRVs and UAVs must be allocated from a CPU accessible descriptor heap as they are copied into the descriptor tables of the library. `FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_ENABLE_PERFORMANCE_COUNTERS` can be used if the application intends to query for timings later. The `FFX_SSSR_CREATE_REFLECTION_VIEW_FLAG_PING_PONG_*` flags  should be set if the normal or roughness surfaces are written in an alternating fashion. Don't set the flags if the surfaces are copied each frame.
 
 The reflection view depends on the screen size. It is recommended to destroy the reflection view on resize and create a new one:
 
@@ -127,11 +165,14 @@ if (status != FFX_SSSR_STATUS_OK) {
 
 ## Reflection View - Resolve
 
-Calling `ffxSssrEncodeResolveReflectionView` dispatches the actual shaders that perform the hierarchical tracing through the depth buffer and optionally also dispatches the denoising passes if the `FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE` flag is set:
+Calling `ffxSssrEncodeResolveReflectionView` dispatches the actual shaders that perform the hierarchical tracing through the depth buffer and optionally also dispatches the denoising passes if the `FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE` flag is set. Depending on the API populate either `FfxSssrD3D12CommandEncodeInfo` or `FfxSssrVkCommandEncodeInfo`:
 
 ```C++
 FfxSssrD3D12CommandEncodeInfo d3d12EncodeInfo = {};
 d3d12EncodeInfo.pCommandList = myCommandList;
+
+FfxSssrVkCommandEncodeInfo vkEncodeInfo = {};
+vkEncodeInfo.commandBuffer = myCommandBufferHandle;
 
 FfxSssrResolveReflectionViewInfo resolveInfo = {};
 resolveInfo.flags = FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_DENOISE | FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING;
@@ -141,9 +182,9 @@ resolveInfo.mostDetailedDepthHierarchyMipLevel = 1;
 resolveInfo.depthBufferThickness = 0.015f;
 resolveInfo.minTraversalOccupancy = 4;
 resolveInfo.samplesPerQuad = FFX_SSSR_RAY_SAMPLES_PER_QUAD_1;
-resolveInfo.eawPassCount = FFX_SSSR_EAW_PASS_COUNT_1;
 resolveInfo.roughnessThreshold = 0.2f;
 resolveInfo.pD3D12CommandEncodeInfo = &d3d12EncodeInfo;
+resolveInfo.pVkCommandEncodeInfo = &vkEncodeInfo;
 FfxSssrStatus status = ffxSssrEncodeResolveReflectionView(myContext, myReflectionView, &resolveInfo);
 if (status != FFX_SSSR_STATUS_OK) {
     // Error handling
@@ -156,8 +197,7 @@ if (status != FFX_SSSR_STATUS_OK) {
 * `resolveInfo.mostDetailedDepthHierarchyMipLevel` limits the most detailed mipmap for depth buffer lookups when tracing non-mirror reflection rays.
 * `resolveInfo.depthBufferThickness` configures the accepted hit distance behind the depth buffer in view space.
 * `resolveInfo.minTraversalOccupancy` limits the number of threads in the depth traversal loop. If less than that number of threads remain present they exit the intersection loop early even if they did not find a depth buffer intersection yet. This only affects non-mirror reflection rays. 
-* `resolveInfo.samplesPerQuad` serves as a starting point how many rays are spawned in glossy regions. The only supported values are `FFX_SSSR_RAY_SAMPLES_PER_QUAD_1`, `FFX_SSSR_RAY_SAMPLES_PER_QUAD_2` and `FFX_SSSR_RAY_SAMPLES_PER_QUAD_4`. The use of `FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING` dynamically bumps this up to `4` to enforce convergence on a per pixel basis.
-* `resolveInfo.eawPassCount` configures the number of Edge-aware á-trous wavelet passes. The only supported values are `FFX_SSSR_EAW_PASS_COUNT_1` and `FFX_SSSR_EAW_PASS_COUNT_3`.
+* `resolveInfo.samplesPerQuad` serves as a starting point how many rays are spawned in glossy regions. The only supported values are `FFX_SSSR_RAY_SAMPLES_PER_QUAD_1`, `FFX_SSSR_RAY_SAMPLES_PER_QUAD_2` and `FFX_SSSR_RAY_SAMPLES_PER_QUAD_4`. The use of `FFX_SSSR_RESOLVE_REFLECTION_VIEW_FLAG_ENABLE_VARIANCE_GUIDED_TRACING` dynamically bumps this up to a maximum of `4` to enforce convergence on a per pixel basis.
 * `resolveInfo.roughnessThreshold` determines the roughness value below which reflection rays are spawned. Any roughness values higher are considered not reflective and the reflection view will contain `(0, 0, 0, 0)`.
 
 When resolving a reflection view, the following operations take place:
@@ -167,15 +207,7 @@ When resolving a reflection view, the following operations take place:
 - The resulting radiance information is denoised using spatio-temporal filtering.
 - The shading values are written out to the output buffer supplied at creation time.
 
-Note that the application is responsible for issuing the UAV barrier to synchronize the writes to the output buffer:
-
-```
-D3D12_RESOURCE_BARRIER resourceBarrier = {};
-resourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
-resourceBarrier.UAV.pResource = myOutputBuffer;
-
-myCommandList->ResourceBarrier(1, &resourceBarrier);
-```
+Note that the application is responsible for issuing the required barrier to synchronize the writes to the output buffer.
 
 ## Reflection View - Performance Profiling
 
@@ -219,12 +251,7 @@ if (status != FFX_SSSR_STATUS_OK) {
 }
 ```
 
-The retrieved times are expressed in numbers of GPU ticks and can be converted to seconds by querying the timestamp frequency of the queue used to execute the encoded command list:
-
-```C++
-uint64_t gpuTicksPerSecond;
-myCommandQueue->GetTimestampFrequency(&gpuTicksPerSecond);
-```
+The retrieved times are expressed in GPU ticks and can be converted using the timestamp frequency of the queue used to execute the encoded command list on D3D12 (`GetTimestampFrequency`). On Vulkan the `timestampPeriod` member of `VkPhysicalDeviceLimits` can be used to convert the times from GPU ticks to nanoseconds.
 
 ## Frame management
 

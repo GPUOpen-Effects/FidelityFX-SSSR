@@ -62,30 +62,6 @@ namespace ffx_sssr
         */
         using TimestampQueries = std::vector<TimestampQuery>;
 
-        /**
-            The ShaderPass class holds the data for an individual shader pass.
-        */
-        class ShaderPass
-        {
-            FFX_SSSR_NON_COPYABLE(ShaderPass);
-
-        public:
-            inline ShaderPass();
-            inline ~ShaderPass();
-
-            inline operator bool() const;
-
-            inline ShaderPass(ShaderPass&& other) noexcept;
-            inline ShaderPass& operator =(ShaderPass&& other) noexcept;
-
-            inline void SafeRelease();
-
-            // The pipeline state object.
-            ID3D12PipelineState* pipeline_state_;
-            // The root signature to be used.
-            ID3D12RootSignature* root_signature_;
-        };
-
         ReflectionViewD3D12();
         ~ReflectionViewD3D12();
 
@@ -95,8 +71,6 @@ namespace ffx_sssr
         void Create(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
         void Destroy();
 
-        void CreateRootSignature(Context& context, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
-        void CreatePipelineState(Context& context);
         void CreateDescriptorHeaps(Context& context);
 
         std::uint32_t GetTimestampQueryIndex() const;
@@ -113,48 +87,8 @@ namespace ffx_sssr
         // The descriptor heap for CBVs, SRVs, and UAVs.
         DescriptorHeapD3D12* descriptor_heap_cbv_srv_uav_;
 
-        // The shader pass that classifies tiles.
-        ShaderPass tile_classification_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_tile_classification_;
-
-        // The shader pass that prepares the indirect arguments.
-        ShaderPass indirect_args_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_indirect_args_;
-
-        // The shader pass intersecting reflection rays with the depth buffer.
-        ShaderPass intersection_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_intersection_;
-
-        // The shader pass that does spatial denoising.
-        ShaderPass spatial_denoising_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_spatial_;
-
-        // The shader pass that does temporal denoising.
-        ShaderPass temporal_denoising_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_temporal_;
-
-        // The shader pass that does the second spatial denoising.
-        ShaderPass eaw_denoising_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_eaw_;
-
-        // The shader pass that does the second spatial denoising with stride 2.
-        ShaderPass eaw_stride_2_denoising_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_eaw_stride_2_;
-
-        // The shader pass that does the second spatial denoising with stride 4.
-        ShaderPass eaw_stride_4_denoising_pass_;
-        // The number of descriptors used in the root signature.
-        std::uint32_t descriptor_count_eaw_stride_4_;
-
-        // The command signature for the indirect dispatches.
-        ID3D12CommandSignature * indirect_dispatch_command_signature_;
+        // The descriptor heap for samplers.
+        DescriptorHeapD3D12* descriptor_heap_samplers_;
 
         // Single heap containing all resources.
         ID3D12Heap * resource_heap_;
@@ -175,13 +109,6 @@ namespace ffx_sssr
         ID3D12Resource * ray_lengths_;
         // Holds the temporal variance of the last two frames.
         ID3D12Resource * temporal_variance_;
-
-        // The Sobol sequence buffer.
-        D3D12_GPU_DESCRIPTOR_HANDLE sobol_buffer_;
-        // The ranking tile buffer for sampling.
-        D3D12_GPU_DESCRIPTOR_HANDLE ranking_tile_buffer_;
-        // The scrambling tile buffer for sampling.
-        D3D12_GPU_DESCRIPTOR_HANDLE scrambling_tile_buffer_;
 
         // The number of GPU ticks spent in the tile classification pass.
         std::uint64_t tile_classification_elapsed_time_;
@@ -217,14 +144,10 @@ namespace ffx_sssr
         DescriptorD3D12 temporal_denoising_descriptor_table_[2];
         // Descriptor tables of the eaw denoising pass.
         DescriptorD3D12 eaw_denoising_descriptor_table_[2];
-        // Descriptor tables of the eaw denoising pass with stride 2.
-        DescriptorD3D12 eaw_stride_2_denoising_descriptor_table_[2];
-        // Descriptor tables of the eaw denoising pass with stride 4.
-        DescriptorD3D12 eaw_stride_4_denoising_descriptor_table_[2];
+        // Descriptor tables for the environment map sampler.
+        DescriptorD3D12 sampler_descriptor_table_;
 
         // The view projection matrix of the last frame.
         matrix4 prev_view_projection_;
     };
 }
-
-#include "reflection_view_d3d12.inl"

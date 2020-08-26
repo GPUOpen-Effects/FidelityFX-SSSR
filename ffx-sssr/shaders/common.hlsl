@@ -48,7 +48,7 @@ FFX_SSSR_DEPTH_UNPACK_FUNCTION
 FFX_SSSR_SCENE_RADIANCE_UNPACK_FUNCTION
 
 // Common constants
-cbuffer Constants : register(b0)
+[[vk::binding(0, 0)]] cbuffer Constants : register(b0)
 {
     float4x4 g_inv_view_proj;
     float4x4 g_proj;

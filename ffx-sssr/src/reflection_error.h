@@ -37,8 +37,8 @@ namespace ffx_sssr
     public:
         reflection_error();
         reflection_error(FfxSssrStatus error);
-        reflection_error(Context& context, FfxSssrStatus error);
-        reflection_error(Context& context, FfxSssrStatus error, char const* format, ...);
+        reflection_error(const Context& context, FfxSssrStatus error);
+        reflection_error(const Context& context, FfxSssrStatus error, char const* format, ...);
 
         // The error code for this exception.
         FfxSssrStatus error_;

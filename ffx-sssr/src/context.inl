@@ -1,3 +1,4 @@
+#include "context.h"
 /**********************************************************************
 Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
@@ -148,11 +149,11 @@ namespace ffx_sssr
     */
     ContextD3D12* Context::GetContextD3D12()
     {
-#ifdef FFX_SSSR_NO_D3D12
-        return nullptr;
-#else // FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         return context_d3d12_.get();
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+        return nullptr;
     }
 
     /**
@@ -162,11 +163,39 @@ namespace ffx_sssr
     */
     ContextD3D12 const* Context::GetContextD3D12() const
     {
-#ifdef FFX_SSSR_NO_D3D12
-        return nullptr;
-#else // FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         return context_d3d12_.get();
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+        return nullptr;
+    }
+
+    /**
+        Gets the Vulkan context.
+
+        \return The Vulkan context.
+    */
+    inline ContextVK * Context::GetContextVK()
+    {
+#ifdef FFX_SSSR_VK
+        return context_vk_.get();
+#endif // FFX_SSSR_VK
+
+        return nullptr;
+    }
+
+    /**
+        Gets the Vulkan context.
+
+        \return The Vulkan context.
+    */
+    inline ContextVK const * Context::GetContextVK() const
+    {
+#ifdef FFX_SSSR_VK
+        return context_vk_.get();
+#endif // FFX_SSSR_VK
+
+        return nullptr;
     }
 
     /**
@@ -225,7 +254,7 @@ namespace ffx_sssr
         \param format The format for the error message.
         \param ... The content of the error message.
     */
-    void Context::Error(FfxSssrStatus error, char const* format, ...)
+    void Context::Error(FfxSssrStatus error, char const* format, ...) const
     {
         va_list args;
         va_start(args, format);
@@ -240,7 +269,7 @@ namespace ffx_sssr
         \param format The format for the error message.
         \param args The content of the error message.
     */
-    void Context::Error(FfxSssrStatus error, char const* format, va_list args)
+    void Context::Error(FfxSssrStatus error, char const* format, va_list args) const
     {
         char buffer[2048], message[2048];
 

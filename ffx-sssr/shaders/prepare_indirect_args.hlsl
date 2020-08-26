@@ -23,10 +23,13 @@ THE SOFTWARE.
 #ifndef FFX_SSSR_INDIRECT_ARGS
 #define FFX_SSSR_INDIRECT_ARGS
 
-RWBuffer<uint> g_tile_counter       : register(u0);
-RWBuffer<uint> g_ray_counter        : register(u1);
-RWBuffer<uint> g_intersect_args     : register(u2);
-RWBuffer<uint> g_denoiser_args      : register(u3);
+// In/Out:
+[[vk::binding(0, 1)]] RWBuffer<uint> g_tile_counter : register(u0);
+[[vk::binding(1, 1)]] RWBuffer<uint> g_ray_counter : register(u1);
+
+// Out:
+[[vk::binding(2, 1)]] RWBuffer<uint> g_intersect_args : register(u2);
+[[vk::binding(3, 1)]] RWBuffer<uint> g_denoiser_args : register(u3);
 
 [numthreads(1, 1, 1)]
 void main()

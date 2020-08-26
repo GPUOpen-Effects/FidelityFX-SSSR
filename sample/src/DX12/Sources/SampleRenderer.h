@@ -24,6 +24,8 @@ THE SOFTWARE.
 
 #include <memory>
 
+#include "base/SaveTexture.h"
+
 // We are queuing (backBufferCount + 0.5) frames, so we need to triple buffer the resources that get modified each frame
 static const int backBufferCount = 3;
 
@@ -65,7 +67,6 @@ public:
         float depthBufferThickness;
         int minTraversalOccupancy;
         int samplesPerQuad;
-        int eawPassCount;
         bool bEnableVarianceGuidedTracing;
         float roughnessThreshold;
 
@@ -74,6 +75,8 @@ public:
         float denoisingTime;
 
         bool showReflectionTarget;
+        bool isBenchmarking;
+        const std::string* screenshotName;
     };
 
     void OnCreate(Device* pDevice, SwapChain *pSwapChain);
@@ -203,7 +206,7 @@ private:
     CBV_SRV_UAV                     m_SssrOutputBufferUAV;
     CBV_SRV_UAV                     m_SssrOutputBufferUAVGPU;
     CBV_SRV_UAV                     m_SssrEnvironmentMapSRV;
-    D3D12_STATIC_SAMPLER_DESC       m_SssrEnvironmentMapSamplerDesc;
+    D3D12_SAMPLER_DESC              m_SssrEnvironmentMapSamplerDesc;
     Texture                         m_SssrOutputBuffer;
 
     RTV                             m_ApplyPipelineRTV;
@@ -225,4 +228,8 @@ private:
 
     UINT64                          m_GpuTicksPerSecond;
 
+    SaveTexture                     m_SaveTexture;
+
+    // For multithreaded texture loading
+    AsyncPool                       m_AsyncPool;
 };

@@ -23,8 +23,16 @@ THE SOFTWARE.
 #include "stdafx.h"
 
 #include "SssrSample.h"
+#include "base/ShaderCompilerCache.h"
 
-const bool VALIDATION_ENABLED = false;
+#ifdef  _DEBUG
+const bool CPU_BASED_VALIDATION_ENABLED = true;
+const bool GPU_BASED_VALIDATION_ENABLED = false;
+#else
+const bool CPU_BASED_VALIDATION_ENABLED = false;
+const bool GPU_BASED_VALIDATION_ENABLED = false;
+#endif //  _DEBUG
+
 
 SssrSample::SssrSample(LPCSTR name) : FrameworkWindows(name)
 {
@@ -45,10 +53,9 @@ SssrSample::SssrSample(LPCSTR name) : FrameworkWindows(name)
 //--------------------------------------------------------------------------------------
 void SssrSample::OnCreate(HWND hWnd)
 {
-    if (!LoadConfiguration())
-    {
-        exit(0);
-    }
+    // get the list of scenes
+    for (const auto& scene : m_JsonConfigFile["scenes"])
+        m_SceneNames.push_back(scene["name"]);
 
     DWORD dwAttrib = GetFileAttributes("..\\media\\");
     if ((dwAttrib == INVALID_FILE_ATTRIBUTES) || ((dwAttrib & FILE_ATTRIBUTE_DIRECTORY)) == 0)
@@ -59,10 +66,11 @@ void SssrSample::OnCreate(HWND hWnd)
 
     // Create Device
     //
-    m_Device.OnCreate("SssrSample", "Cauldron", VALIDATION_ENABLED, hWnd);
+    m_Device.OnCreate("SssrSample", "Cauldron", CPU_BASED_VALIDATION_ENABLED, GPU_BASED_VALIDATION_ENABLED, hWnd);
     m_Device.CreatePipelineCache();
 
-    //init the shader compiler
+    // Init the shader compiler
+    InitDirectXCompiler();
     CreateShaderCache();
 
     // Create Swapchain
@@ -106,12 +114,12 @@ void SssrSample::OnCreate(HWND hWnd)
     m_State.depthBufferThickness = 0.015f;
     m_State.minTraversalOccupancy = 4;
     m_State.samplesPerQuad = 1;
-    m_State.eawPassCount = 1;
     m_State.bEnableVarianceGuidedTracing = true;
     m_State.bShowIntersectionResults = false;
     m_State.roughnessThreshold = 0.2f;
     m_State.showReflectionTarget = false;
     m_State.bDrawScreenSpaceReflections = true;
+    m_State.screenshotName = NULL;
 }
 
 //--------------------------------------------------------------------------------------
@@ -174,23 +182,6 @@ void SssrSample::SetFullScreen(bool fullscreen)
     m_Swapchain.SetFullScreen(fullscreen);
 }
 
-bool SssrSample::LoadConfiguration()
-{
-    std::ifstream f("config.json");
-    if (!f)
-    {
-        MessageBox(NULL, "Config file not found!\n", "Cauldron Panic!", MB_ICONERROR);
-        return false;
-    }
-    f >> m_JsonConfigFile;
-
-    // get the list of scenes
-    for (const auto & scene : m_JsonConfigFile["scenes"])
-        m_SceneNames.push_back(scene["name"]);
-
-    return true;
-}
-
 void SssrSample::BuildUI()
 {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -216,55 +207,7 @@ void SssrSample::BuildUI()
         auto getterLambda = [](void* data, int idx, const char** out_str)->bool { *out_str = ((std::vector<std::string> *)data)->at(idx).c_str(); return true; };
         if (ImGui::Combo("model", &selectedScene, getterLambda, &m_SceneNames, (int)m_SceneNames.size()) || (m_pGltfLoader == NULL))
         {
-            json scene = m_JsonConfigFile["scenes"][selectedScene];
-            if (m_pGltfLoader != NULL)
-            {
-                //free resources, unload the current scene, and load new scene...
-                m_Device.GPUFlush();
-
-                m_Node->UnloadScene();
-                m_Node->OnDestroyWindowSizeDependentResources();
-                m_Node->OnDestroy();
-                m_pGltfLoader->Unload();
-                m_Node->OnCreate(&m_Device, &m_Swapchain);
-                m_Node->OnCreateWindowSizeDependentResources(&m_Swapchain, m_Width, m_Height);
-            }
-
-            delete(m_pGltfLoader);
-            m_pGltfLoader = new GLTFCommon();
-
-            if (m_pGltfLoader->Load(scene["directory"], scene["filename"]) == false)
-            {
-                MessageBox(NULL, "The selected model couldn't be found, please check the documentation", "Cauldron Panic!", MB_ICONERROR);
-                exit(0);
-            }
-
-            // Load the UI settings, and also some defaults cameras and lights, in case the GLTF has none
-            {
-#define LOAD(j, key, val) val = j.value(key, val)
-
-                // global settings
-                LOAD(scene, "toneMapper", m_State.toneMapper);
-                LOAD(scene, "skyDomeType", m_State.skyDomeType);
-                LOAD(scene, "exposure", m_State.exposure);
-                LOAD(scene, "iblFactor", m_State.iblFactor);
-                LOAD(scene, "emmisiveFactor", m_State.emmisiveFactor);
-                LOAD(scene, "skyDomeType", m_State.skyDomeType);
-
-                // default light
-                m_State.lightIntensity = scene.value("intensity", 1.0f);
-
-                // default camera (in case the gltf has none)
-                json camera = scene["camera"];
-                LOAD(camera, "yaw", m_Yaw);
-                LOAD(camera, "pitch", m_Pitch);
-                LOAD(camera, "distance", m_Distance);
-                XMVECTOR lookAt = GetVector(GetElementJsonArray(camera, "lookAt", { 0.0, 0.0, 0.0 }));
-                m_State.camera.LookAt(m_Yaw, m_Pitch, m_Distance, lookAt);
-
-                // indicate the mainloop we started loading a GLTF and it needs to load the rest (textures and geometry)
-                m_bLoadingScene = true;
-            }
+            LoadScene(selectedScene);
 
             // bail out as we need to reload everything
             ImGui::End();
@@ -314,10 +257,6 @@ void SssrSample::BuildUI()
         ImGui::RadioButton("2", &m_State.samplesPerQuad, 2); ImGui::SameLine();
         ImGui::RadioButton("4", &m_State.samplesPerQuad, 4);
 
-        ImGui::Text("EAW Pass Count"); ImGui::SameLine();
-        ImGui::RadioButton("EAW 1", &m_State.eawPassCount, 1); ImGui::SameLine();
-        ImGui::RadioButton("EAW 3", &m_State.eawPassCount, 3);
-
         ImGui::Value("Tile Classification Elapsed Time", 1000 * m_State.tileClassificationTime, "%.1f us");
         ImGui::Value("Intersection Elapsed Time", 1000 * m_State.intersectionTime, "%.1f us");
         ImGui::Value("Denoising Elapsed Time", 1000 * m_State.denoisingTime, "%.1f us");
@@ -325,24 +264,19 @@ void SssrSample::BuildUI()
 
     if (ImGui::CollapsingHeader("Profiler"))
     {
-        std::vector<TimeStamp> timeStamps = m_Node->GetTimingValues();
+        const std::vector<TimeStamp>& timeStamps = m_Node->GetTimingValues();
         if (timeStamps.size() > 0)
         {
-            for (uint32_t i = 1; i < timeStamps.size(); i++)
+            for (uint32_t i = 0; i < timeStamps.size(); i++)
             {
-                float DeltaTime = ((float)(timeStamps[i].m_microseconds - timeStamps[i - 1].m_microseconds));
-                ImGui::Text("%-17s: %7.1f us", timeStamps[i].m_label.c_str(), DeltaTime);
+                ImGui::Text("%-22s: %7.1f", timeStamps[i].m_label.c_str(), timeStamps[i].m_microseconds);
             }
 
             //scrolling data and average computing
             static float values[128];
-            values[127] = (float)(timeStamps.back().m_microseconds - timeStamps.front().m_microseconds);
-            float average = values[0];
-            for (uint32_t i = 0; i < 128 - 1; i++) { values[i] = values[i + 1]; average += values[i]; }
-            average /= 128;
-
-            ImGui::Text("%-17s: %7.1f us", "Total GPU time", average);
-            ImGui::PlotLines("", values, 128, 0, "", 0.0f, 30000.0f, ImVec2(0, 80));
+            values[127] = timeStamps.back().m_microseconds;
+            for (uint32_t i = 0; i < 128 - 1; i++) { values[i] = values[i + 1]; }
+            ImGui::PlotLines("", values, 128, 0, "GPU frame time (us)", 0.0f, 30000.0f, ImVec2(0, 80));
         }
     }
 
@@ -407,6 +341,65 @@ void SssrSample::HandleInput()
     }
 }
 
+void SssrSample::LoadScene(int sceneIndex)
+{
+    json scene = m_JsonConfigFile["scenes"][sceneIndex];
+    if (m_pGltfLoader != NULL)
+    {
+        //free resources, unload the current scene, and load new scene...
+        m_Device.GPUFlush();
+
+        m_Node->UnloadScene();
+        m_Node->OnDestroyWindowSizeDependentResources();
+        m_Node->OnDestroy();
+        m_pGltfLoader->Unload();
+        m_Node->OnCreate(&m_Device, &m_Swapchain);
+        m_Node->OnCreateWindowSizeDependentResources(&m_Swapchain, m_Width, m_Height);
+    }
+
+    delete(m_pGltfLoader);
+    m_pGltfLoader = new GLTFCommon();
+
+    if (m_pGltfLoader->Load(scene["directory"], scene["filename"]) == false)
+    {
+        MessageBox(NULL, "The selected model couldn't be found, please check the documentation", "Cauldron Panic!", MB_ICONERROR);
+        exit(0);
+    }
+
+    // Load the UI settings, and also some defaults cameras and lights, in case the GLTF has none
+    {
+#define LOAD(j, key, val) val = j.value(key, val)
+
+        // global settings
+        LOAD(scene, "toneMapper", m_State.toneMapper);
+        LOAD(scene, "skyDomeType", m_State.skyDomeType);
+        LOAD(scene, "exposure", m_State.exposure);
+        LOAD(scene, "iblFactor", m_State.iblFactor);
+        LOAD(scene, "emmisiveFactor", m_State.emmisiveFactor);
+        LOAD(scene, "skyDomeType", m_State.skyDomeType);
+
+        // default light
+        m_State.lightIntensity = scene.value("intensity", 1.0f);
+
+        // default camera (in case the gltf has none)
+        json camera = scene["camera"];
+        LOAD(camera, "yaw", m_Yaw);
+        LOAD(camera, "pitch", m_Pitch);
+        LOAD(camera, "distance", m_Distance);
+        XMVECTOR lookAt = GetVector(GetElementJsonArray(camera, "lookAt", { 0.0, 0.0, 0.0 }));
+        m_State.camera.LookAt(m_Yaw, m_Pitch, m_Distance, lookAt);
+
+        // set benchmarking state if enabled 
+        if (m_State.isBenchmarking)
+        {
+            BenchmarkConfig(scene["BenchmarkSettings"], -1, m_pGltfLoader);
+        }
+
+        // indicate the mainloop we started loading a GLTF and it needs to load the rest (textures and geometry)
+        m_bLoadingScene = true;
+    }
+}
+
 //--------------------------------------------------------------------------------------
 //
 // OnResize
@@ -448,6 +441,39 @@ void SssrSample::OnResize(uint32_t width, uint32_t height)
     m_State.camera.SetFov(XM_PI / 4, m_Width, m_Height, 0.1f, 1000.0f);
 }
 
+void SssrSample::OnParseCommandLine(LPSTR lpCmdLine, uint32_t* pWidth, uint32_t* pHeight, bool* pbFullScreen)
+{
+    // First load configuration
+    std::ifstream f("config.json");
+    if (!f)
+    {
+        MessageBox(NULL, "Config file not found!\n", "Cauldron Panic!", MB_ICONERROR);
+        exit(-1);
+    }
+    f >> m_JsonConfigFile;
+
+    // Parse command line and override the config file
+    try
+    {
+        if (strlen(lpCmdLine) > 0)
+        {
+            auto j3 = json::parse(lpCmdLine);
+            m_JsonConfigFile.merge_patch(j3);
+        }
+    }
+    catch (json::parse_error)
+    {
+        Trace("Error parsing commandline\n");
+        exit(0);
+    }
+
+    // Set values
+    *pWidth = m_JsonConfigFile.value("width", 1920);
+    *pHeight = m_JsonConfigFile.value("height", 1080);
+    *pbFullScreen = m_JsonConfigFile.value("fullScreen", false);
+    m_State.isBenchmarking = m_JsonConfigFile.value("benchmark", false);
+}
+
 //--------------------------------------------------------------------------------------
 //
 // OnRender, updates the state from the UI, animates, transforms and renders the scene
@@ -477,6 +503,11 @@ void SssrSample::OnRender()
             m_Time = 0;
             m_bLoadingScene = false;
         }
+    }
+    else if (m_pGltfLoader && m_State.isBenchmarking)
+    {
+        const std::vector<TimeStamp>& timeStamps = m_Node->GetTimingValues();
+        m_Time = BenchmarkLoop(timeStamps, &m_State.camera, &m_State.screenshotName);
     }
     else
     {
@@ -533,6 +564,6 @@ int WINAPI WinMain(HINSTANCE hInstance,
     uint32_t Width = 1920; // 1536;
     uint32_t Height = 1080; // 841;
 
-    // create new DX sample
-    return RunFramework(hInstance, lpCmdLine, nCmdShow, Width, Height, new SssrSample(Name));
+    // create new sample
+    return RunFramework(hInstance, lpCmdLine, nCmdShow, new SssrSample(Name));
 }

@@ -4,8 +4,14 @@ project(stochastic-screen-space-reflections)
 
 find_package(PythonInterp 3.6 REQUIRED)
 
-option(FFX_SSSR_NO_D3D12 "Stochastic Screen Space Reflections - Skip D3D12 backend" OFF)
-option(FFX_SSSR_NO_VK "Stochastic Screen Space Reflections - Skip VK backend" OFF)
+# ensure that only one option is enabled
+if(FFX_SSSR_VK AND FFX_SSSR_D3D12)
+    message(FATAL_ERROR "FFX_SSSR_VK and FFX_SSSR_D3D12 are enabled. Please make sure to enable only one at a time.")
+endif()
+
+if(FFX_SSSR_VK)
+    find_package(Vulkan REQUIRED)
+endif()
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -25,8 +31,7 @@ file(GLOB FFX_SSSR_SOURCE_FILES
 file(GLOB FFX_SSSR_SHADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsl)
 
-if(FFX_SSSR_NO_D3D12)
-else()
+if(FFX_SSSR_D3D12)
     file(GLOB FFX_SSSR_HEADER_FILES_D3D12
         ${CMAKE_CURRENT_SOURCE_DIR}/inc/ffx_sssr_d3d12.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12/*.h)
@@ -36,8 +41,7 @@ else()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/d3d12/*.cpp)
 endif()
 
-if(FFX_SSSR_NO_VK)
-else()
+if(FFX_SSSR_VK)
     file(GLOB FFX_SSSR_HEADER_FILES_VK
         ${CMAKE_CURRENT_SOURCE_DIR}/inc/ffx_sssr_vk.h
         ${CMAKE_CURRENT_SOURCE_DIR}/src/vk/*.h)
@@ -54,7 +58,6 @@ foreach(shaderfile classify_tiles
 				   intersect
 				   prepare_indirect_args
 				   resolve_eaw
-				   resolve_eaw_stride
 				   resolve_spatial
 				   resolve_temporal)
 					
@@ -87,12 +90,12 @@ target_include_directories(FFX_SSSR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/external
 target_include_directories(FFX_SSSR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/externals/dxc)
 target_include_directories(FFX_SSSR PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/externals/samplerCPP)
 
-if(FFX_SSSR_NO_D3D12)
-    target_compile_definitions(FFX_SSSR PRIVATE FFX_SSSR_NO_D3D12)
+if(FFX_SSSR_D3D12)
+    target_compile_definitions(FFX_SSSR PRIVATE FFX_SSSR_D3D12)
 endif()
 
-if(FFX_SSSR_NO_VK)
-    target_compile_definitions(FFX_SSSR PRIVATE FFX_SSSR_NO_VK)
+if(FFX_SSSR_VK)
+    target_compile_definitions(FFX_SSSR PRIVATE FFX_SSSR_VK)
 endif()
 
 target_sources(FFX_SSSR PRIVATE
@@ -123,4 +126,9 @@ if(MSVC)
         PROPERTIES
         VS_TOOL_OVERRIDE
         "None")
+endif()
+
+
+if(FFX_SSSR_VK)
+    target_link_libraries (FFX_SSSR Vulkan::Vulkan)
 endif()

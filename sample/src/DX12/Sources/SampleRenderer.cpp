@@ -30,7 +30,10 @@ THE SOFTWARE.
 
 void FfxSssrLoggingFunction(const char* pMessage, void* pUserData)
 {
-    Trace(pMessage);
+    char buffer[4096];
+    snprintf(buffer, sizeof(buffer), "%s\n", pMessage);
+    MessageBox(NULL, buffer, "RtShadows Error", MB_OK | MB_ICONERROR);
+    exit(-1);
 }
 
 //--------------------------------------------------------------------------------------
@@ -59,11 +62,11 @@ void SampleRenderer::OnCreate(Device* pDevice, SwapChain *pSwapChain)
     m_CommandListRing.OnCreate(pDevice, backBufferCount, commandListsPerBackBuffer, pDevice->GetGraphicsQueue()->GetDesc());
 
     // Create a 'dynamic' constant buffer
-    const uint32_t constantBuffersMemSize = 20 * 1024 * 1024;
+    const uint32_t constantBuffersMemSize = 200 * 1024 * 1024;
     m_ConstantBufferRing.OnCreate(pDevice, backBufferCount, constantBuffersMemSize, &m_ResourceViewHeaps);
 
     // Create a 'static' pool for vertices, indices and constant buffers
-    const uint32_t staticGeometryMemSize = 128 * 1024 * 1024;
+    const uint32_t staticGeometryMemSize = 5 * 128 * 1024 * 1024;
     m_VidMemBufferPool.OnCreate(pDevice, staticGeometryMemSize, USE_VID_MEM, "StaticGeom");
 
     // initialize the GPU time stamps module
@@ -326,7 +329,21 @@ void SampleRenderer::OnCreateWindowSizeDependentResources(SwapChain *pSwapChain,
     m_SssrOutputBuffer.CreateUAV(0, &m_SssrOutputBufferUAV);
     m_SssrOutputBuffer.CreateUAV(0, &m_SssrOutputBufferUAVGPU);
 
-    m_SkyDome.SetDescriptorSpec(0, &m_SssrEnvironmentMapSRV, 0, &m_SssrEnvironmentMapSamplerDesc);
+    D3D12_STATIC_SAMPLER_DESC environmentSamplerDesc = {};
+    m_SkyDome.SetDescriptorSpec(0, &m_SssrEnvironmentMapSRV, 0, &environmentSamplerDesc);
+    m_SssrEnvironmentMapSamplerDesc.AddressU = environmentSamplerDesc.AddressU;
+    m_SssrEnvironmentMapSamplerDesc.AddressV = environmentSamplerDesc.AddressV;
+    m_SssrEnvironmentMapSamplerDesc.AddressW = environmentSamplerDesc.AddressW;
+    m_SssrEnvironmentMapSamplerDesc.BorderColor[0] = 0;
+    m_SssrEnvironmentMapSamplerDesc.BorderColor[1] = 0;
+    m_SssrEnvironmentMapSamplerDesc.BorderColor[2] = 0;
+    m_SssrEnvironmentMapSamplerDesc.BorderColor[3] = 0;
+    m_SssrEnvironmentMapSamplerDesc.ComparisonFunc = environmentSamplerDesc.ComparisonFunc;
+    m_SssrEnvironmentMapSamplerDesc.Filter = environmentSamplerDesc.Filter;
+    m_SssrEnvironmentMapSamplerDesc.MaxAnisotropy = environmentSamplerDesc.MaxAnisotropy;
+    m_SssrEnvironmentMapSamplerDesc.MaxLOD = environmentSamplerDesc.MaxLOD;
+    m_SssrEnvironmentMapSamplerDesc.MinLOD = environmentSamplerDesc.MinLOD;
+    m_SssrEnvironmentMapSamplerDesc.MipLODBias = environmentSamplerDesc.MipLODBias;
 
     FfxSssrD3D12CreateReflectionViewInfo d3d12ReflectionViewInfo = {};
     d3d12ReflectionViewInfo.depthBufferHierarchySRV         = m_SssrDepthBufferHierarchySRV.GetCPU();
@@ -411,6 +428,8 @@ int SampleRenderer::LoadScene(GLTFCommon *pGLTFCommon, int stage)
         ImGui::EndPopup();
     }
 
+    AsyncPool* pAsyncPool = &m_AsyncPool;
+
     // Loading stages
     //
     if (stage == 0)
@@ -429,7 +448,7 @@ int SampleRenderer::LoadScene(GLTFCommon *pGLTFCommon, int stage)
 
         // here we are loading onto the GPU all the textures and the inverse matrices
         // this data will be used to create the PBR and Depth passes       
-        m_pGLTFTexturesAndBuffers->LoadTextures();
+        m_pGLTFTexturesAndBuffers->LoadTextures(pAsyncPool);
     }
     else if (stage == 7)
     {
@@ -444,7 +463,8 @@ int SampleRenderer::LoadScene(GLTFCommon *pGLTFCommon, int stage)
                 &m_ResourceViewHeaps,
                 &m_ConstantBufferRing,
                 &m_VidMemBufferPool,
-                m_pGLTFTexturesAndBuffers
+                m_pGLTFTexturesAndBuffers,
+                pAsyncPool
             );
         }
             
@@ -460,7 +480,8 @@ int SampleRenderer::LoadScene(GLTFCommon *pGLTFCommon, int stage)
                 &m_VidMemBufferPool,
                 m_pGLTFTexturesAndBuffers,
                 m_MotionVectors.GetFormat(),
-                m_NormalBuffer.GetFormat()
+                m_NormalBuffer.GetFormat(),
+                pAsyncPool
             );
         }
     }
@@ -479,10 +500,13 @@ int SampleRenderer::LoadScene(GLTFCommon *pGLTFCommon, int stage)
             m_pGLTFTexturesAndBuffers,
             &m_AmbientLight,
             false,
+            false,
             DXGI_FORMAT_R16G16B16A16_FLOAT,
             m_SpecularRoughness.GetFormat(),
             DXGI_FORMAT_UNKNOWN,
-            1
+            DXGI_FORMAT_UNKNOWN,
+            1,
+            pAsyncPool
         );
     }
     else if (stage == 10)
@@ -811,7 +835,6 @@ void SampleRenderer::RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCm
     resolveInfo.depthBufferThickness = pState->depthBufferThickness;
     resolveInfo.minTraversalOccupancy = pState->minTraversalOccupancy;
     resolveInfo.samplesPerQuad = pState->samplesPerQuad == 4 ? FFX_SSSR_RAY_SAMPLES_PER_QUAD_4 : (pState->samplesPerQuad == 2 ? FFX_SSSR_RAY_SAMPLES_PER_QUAD_2 : FFX_SSSR_RAY_SAMPLES_PER_QUAD_1);
-    resolveInfo.eawPassCount = pState->eawPassCount == 3 ? FFX_SSSR_EAW_PASS_COUNT_3 : FFX_SSSR_EAW_PASS_COUNT_1;
     resolveInfo.roughnessThreshold = pState->roughnessThreshold;
 
     status = ffxSssrEncodeResolveReflectionView(m_SssrContext, m_SssrReflectionView, &resolveInfo);
@@ -1160,6 +1183,11 @@ void SampleRenderer::OnRender(State *pState, SwapChain *pSwapChain)
     // Render HUD
     RenderHUD(pCmdLst2, pSwapChain);
 
+    if (pState->screenshotName != NULL)
+    {
+        m_SaveTexture.CopyRenderTargetIntoStagingTexture(m_pDevice->GetDevice(), pCmdLst2, pSwapChain->GetCurrentBackBufferResource(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
+
     // Transition swapchain into present mode
     Barriers(pCmdLst2, {
         CD3DX12_RESOURCE_BARRIER::Transition(pSwapChain->GetCurrentBackBufferResource(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT)
@@ -1174,6 +1202,12 @@ void SampleRenderer::OnRender(State *pState, SwapChain *pSwapChain)
 
     ID3D12CommandList* CmdListList2[] = { pCmdLst2 };
     m_pDevice->GetGraphicsQueue()->ExecuteCommandLists(1, CmdListList2);
+
+    if (pState->screenshotName != NULL)
+    {
+        m_SaveTexture.SaveStagingTextureAsJpeg(m_pDevice->GetDevice(), m_pDevice->GetGraphicsQueue(), pState->screenshotName->c_str());
+        pState->screenshotName = NULL;
+    }
             
     // Update previous camera matrices
     pState->camera.UpdatePreviousMatrices();
@@ -1238,8 +1272,8 @@ void SampleRenderer::CreateApplyReflectionsPipeline()
     D3D12_SHADER_BYTECODE vsShaderByteCode = {};
     D3D12_SHADER_BYTECODE psShaderByteCode = {};
     DefineList defines;
-    CompileShaderFromFile("ApplyReflections.hlsl", &defines, "vs_main", "vs_5_1", 0, &vsShaderByteCode);
-    CompileShaderFromFile("ApplyReflections.hlsl", &defines, "ps_main", "ps_5_1", 0, &psShaderByteCode);
+    CompileShaderFromFile("ApplyReflections.hlsl", &defines, "vs_main", "-T vs_6_0", &vsShaderByteCode);
+    CompileShaderFromFile("ApplyReflections.hlsl", &defines, "ps_main", "-T ps_6_0", &psShaderByteCode);
 
     D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = {};
     desc.VS = vsShaderByteCode;
@@ -1335,7 +1369,7 @@ void SampleRenderer::CreateDepthDownsamplePipeline()
 
     D3D12_SHADER_BYTECODE shaderByteCode = {};
     DefineList defines;
-    CompileShaderFromFile("DepthDownsample.hlsl", &defines, "main", "cs_6_0", 0, &shaderByteCode);
+    CompileShaderFromFile("DepthDownsample.hlsl", &defines, "main", "-T cs_6_0", &shaderByteCode);
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC desc = {};
     desc.pRootSignature = m_DownsampleRootSignature;

@@ -13,11 +13,12 @@ To build this sample, the following tools are required:
 - [CMake 3.4](https://cmake.org/download/)
 - [Visual Studio 2017](https://visualstudio.microsoft.com/downloads/)
 - [Windows 10 SDK 10.0.17763.0](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk)
+- [Vulkan SDK 1.2.141.2](https://www.lunarg.com/vulkan-sdk/)
 - [Python 3.6](https://www.python.org/downloads/release/python-360/)
+- [Git LFS](https://git-lfs.github.com/)
 
 Then follow these steps:
 
-0) This repository makes use of https://git-lfs.github.com/ to store large files.
 1) Clone the repository with its submodules:
     ```
     > git clone https://github.com/GPUOpen-Effects/FidelityFX-SSSR.git --recurse-submodules
@@ -29,5 +30,5 @@ Then follow these steps:
     > GenerateSolutions.bat
     ```
 
-3) Open the solution in the DX12 directory, compile and run.
+3) Open the solution in the DX12/VK directory, compile and run.
 

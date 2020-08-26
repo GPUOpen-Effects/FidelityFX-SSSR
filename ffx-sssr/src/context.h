@@ -33,7 +33,8 @@ THE SOFTWARE.
 namespace ffx_sssr
 {
     class ContextD3D12;
-
+    class ContextVK;
+    
     /**
         The Context class encapsulates the data for a single execution context.
 
@@ -70,6 +71,9 @@ namespace ffx_sssr
         inline ContextD3D12* GetContextD3D12();
         inline ContextD3D12 const* GetContextD3D12() const;
 
+        inline ContextVK* GetContextVK();
+        inline ContextVK const* GetContextVK() const;
+
         void CreateReflectionView(std::uint64_t reflection_view_id, FfxSssrCreateReflectionViewInfo const& create_reflection_view_info);
         void ResolveReflectionView(std::uint64_t reflection_view_id, FfxSssrResolveReflectionViewInfo const& resolve_reflection_view_info);
 
@@ -77,8 +81,8 @@ namespace ffx_sssr
         inline void SetAPICall(char const* api_call);
 
         inline static char const* GetErrorName(FfxSssrStatus error);
-        inline void Error(FfxSssrStatus error, char const* format, ...);
-        inline void Error(FfxSssrStatus error, char const* format, va_list args);
+        inline void Error(FfxSssrStatus error, char const* format, ...) const;
+        inline void Error(FfxSssrStatus error, char const* format, va_list args) const;
         inline void AdvanceToNextFrame();
 
         void GetReflectionViewTileClassificationElapsedTime(std::uint64_t reflection_view_id, std::uint64_t& elapsed_time) const;
@@ -92,6 +96,7 @@ namespace ffx_sssr
 
     protected:
         friend class ContextD3D12;
+        friend class ContextVK;
 
         static inline ResourceType GetResourceType(std::uint64_t object_id);
         static inline void SetResourceType(std::uint64_t& object_id, ResourceType resource_type);
@@ -109,10 +114,15 @@ namespace ffx_sssr
         // The API call that is currently being executed.
         char const* api_call_;
 
-#ifndef FFX_SSSR_NO_D3D12
+#ifdef FFX_SSSR_D3D12
         // The Direct3D12 context object.
         std::unique_ptr<ContextD3D12> context_d3d12_;
-#endif // FFX_SSSR_NO_D3D12
+#endif // FFX_SSSR_D3D12
+
+#ifdef FFX_SSSR_VK
+        // The Direct3D12 context object.
+        std::unique_ptr<ContextVK> context_vk_;
+#endif // FFX_SSSR_VK
 
         // The list of reflection view identifiers.
         IdDispenser reflection_view_id_dispenser_;

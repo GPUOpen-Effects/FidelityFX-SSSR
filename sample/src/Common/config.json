@@ -1,4 +1,8 @@
 {
+    "width": 1920,
+    "height": 1080,
+    "fullScreen": false,
+    "benchmark": false,
     "scenes": [
         {
             "name": "Chess",
@@ -14,6 +18,30 @@
                 "pitch": 0.15,
                 "distance": 1.0,
                 "lookAt": [ 0, 0, 0 ]
+            },
+            "BenchmarkSettings": {
+                "timeStep": 1,
+                "timeStart": 0,
+                "timeEnd": 10000,
+                "exitWhenTimeEnds": true,
+                "resultsFilename": "Chess.csv",
+                "warmUpFrames": 200,
+                "sequence": {
+                    "keyFrames": [
+                        {
+                            "time": 0,
+                            "from": [ 0.921573281, 0.149438143, 0.358288825 ],
+                            "to": [ 0, 0, 0 ],
+                            "screenShotName": "Chess_Camera1.jpg"
+                        },
+                        {
+                            "time": 5000,
+                            "from": [ 0.681404650, 0.0632404834, 0.171917275 ],
+                            "to": [ 0, 0, 0 ],
+                            "screenShotName": "Chess_Camera2.jpg"
+                        }
+                    ]
+                }
             }
         }
     ]

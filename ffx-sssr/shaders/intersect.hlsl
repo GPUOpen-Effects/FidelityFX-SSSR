@@ -23,22 +23,25 @@ THE SOFTWARE.
 #ifndef FFX_SSSR_INTERSECT
 #define FFX_SSSR_INTERSECT
 
-Texture2D<FFX_SSSR_SCENE_TEXTURE_FORMAT>        g_lit_scene                 : register(t0); // Scene rendered with lighting and shadows
-Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT>        g_depth_buffer_hierarchy    : register(t1);
-Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT>      g_normal                    : register(t2);
-Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT>    g_roughness                 : register(t3);
-TextureCube                                     g_environment_map           : register(t4);
-Buffer<uint>                                    g_sobol_buffer              : register(t5);
-Buffer<uint>                                    g_ranking_tile_buffer       : register(t6);
-Buffer<uint>                                    g_scrambling_tile_buffer    : register(t7);
+// In:
+[[vk::binding(0, 1)]] Texture2D<FFX_SSSR_SCENE_TEXTURE_FORMAT> g_lit_scene                    : register(t0); // scene rendered with lighting and shadows
+[[vk::binding(1, 1)]] Texture2D<FFX_SSSR_DEPTH_TEXTURE_FORMAT> g_depth_buffer_hierarchy       : register(t1);
+[[vk::binding(2, 1)]] Texture2D<FFX_SSSR_NORMALS_TEXTURE_FORMAT> g_normal                     : register(t2);
+[[vk::binding(3, 1)]] Texture2D<FFX_SSSR_ROUGHNESS_TEXTURE_FORMAT> g_roughness                : register(t3);
+[[vk::binding(4, 1)]] TextureCube g_environment_map                                           : register(t4);
+[[vk::binding(5, 1)]] Buffer<uint> g_sobol_buffer                                             : register(t5);
+[[vk::binding(6, 1)]] Buffer<uint> g_ranking_tile_buffer                                      : register(t6);
+[[vk::binding(7, 1)]] Buffer<uint> g_scrambling_tile_buffer                                   : register(t7);
+[[vk::binding(8, 1)]] Buffer<uint> g_ray_list                                                 : register(t8);
 
-SamplerState g_linear_sampler                                               : register(s0);
-SamplerState g_environment_map_sampler                                      : register(s1);
+// Samplers:
+[[vk::binding(9, 1)]] SamplerState g_linear_sampler                                           : register(s0);
+[[vk::binding(10, 1)]] SamplerState g_environment_map_sampler                                 : register(s1);
 
-RWTexture2D<float4> g_intersection_result                                   : register(u0); // Reflection colors at the end of the intersect pass. 
-RWTexture2D<float>  g_ray_lengths                                           : register(u1);
-RWTexture2D<float4> g_denoised_reflections                                  : register(u2); // Mirror reflections don't need to be denoised, the intersection pass can just write them to the final target.
-RWBuffer<uint>      g_ray_list                                              : register(u3);
+// Out:
+[[vk::binding(11, 1)]] RWTexture2D<float4> g_intersection_result                              : register(u0); // reflection colors at the end of the intersect pass. 
+[[vk::binding(12, 1)]] RWTexture2D<float> g_ray_lengths                                       : register(u1);
+[[vk::binding(13, 1)]] RWTexture2D<float4> g_denoised_reflections                             : register(u2); // Mirror reflections don't need to be denoised, the intersection pass can just write them to the final target.
 
 // Blue Noise Sampler by Eric Heitz. Returns a value in the range [0, 1].
 float SampleRandomNumber(in uint pixel_i, in uint pixel_j, in uint sample_index, in uint sample_dimension)
