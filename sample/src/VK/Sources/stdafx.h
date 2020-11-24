@@ -61,6 +61,3 @@ using namespace DirectX;
 #include "Widgets/WireframeSphere.h"
 
 using namespace CAULDRON_VK;
-
-#include "ffx_sssr.h"
-#include "ffx_sssr_vk.h"

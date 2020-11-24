@@ -2,22 +2,24 @@ project (SssrSample_VK)
 
 add_compile_options(/MP)
 
-set(Sources_src 
-	Sources/SssrSample.cpp
-	Sources/SssrSample.h
-	Sources/SampleRenderer.cpp
-	Sources/SampleRenderer.h
-	Sources/stdafx.cpp
-	Sources/stdafx.h)
+file(GLOB Sources_src 
+	Sources/*.h
+	Sources/*.cpp
+	)
 
-set(Shaders_src
-    ${CMAKE_CURRENT_SOURCE_DIR}/Shaders/ApplyReflections.hlsl
-    ${CMAKE_CURRENT_SOURCE_DIR}/Shaders/DepthDownsample.hlsl
-    ${CMAKE_CURRENT_SOURCE_DIR}/Shaders/ffx_a.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/Shaders/ffx_spd.h)
+file(GLOB Shaders_src
+    ../Shaders/*.hlsl
+    ../Shaders/*.h
+    ../../../ffx-dnsr/ffx-reflection-dnsr/*.h
+    ../../../ffx-dnsr/ffx-reflection-dnsr/*.hlsl
+	../../../ffx-sssr/*.h
+    ../../../ffx-sssr/*.hlsl
+	../../../ffx-spd/*.h
+    ../../../ffx-spd/*.hlsl
+	)
 
-set(Common_src
-	${CMAKE_CURRENT_SOURCE_DIR}/../Common/config.json
+file(GLOB Common_src
+	../Common/config.json
 )
     
 source_group("Sources"            FILES ${Sources_src})    
@@ -46,7 +48,7 @@ copyCommand("${Shaders_src}" ${CMAKE_HOME_DIRECTORY}/bin/ShaderLibVK)
 copyCommand("${Common_src}" ${CMAKE_HOME_DIRECTORY}/bin)
 
 add_executable(${PROJECT_NAME} WIN32 ${Sources_src} ${Shaders_src} ${Common_src}) 
-target_link_libraries (${PROJECT_NAME} LINK_PUBLIC Cauldron_VK FFX_SSSR ImGUI)
+target_link_libraries (${PROJECT_NAME} LINK_PUBLIC Cauldron_VK ImGUI)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_HOME_DIRECTORY}/bin")
 

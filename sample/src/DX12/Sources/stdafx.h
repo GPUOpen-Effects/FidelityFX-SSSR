@@ -63,6 +63,3 @@ using namespace DirectX;
 
 #include "Widgets\wireframe.h"
 using namespace CAULDRON_DX12;
-
-#include "ffx_sssr.h"
-#include "ffx_sssr_d3d12.h"

@@ -1,3 +1,6 @@
 [submodule "sample/libs/cauldron"]
 	path = sample/libs/cauldron
 	url = ../../GPUOpen-LibrariesAndSDKs/Cauldron.git
+[submodule "ffx-dnsr"]
+	path = ffx-dnsr
+	url = ../../GPUOpen-Effects/FidelityFX-Denoiser.git

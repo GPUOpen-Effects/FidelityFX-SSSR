@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include <memory>
 
 #include "base/SaveTexture.h"
+#include "SSSR.h"
 
 // We are queuing (backBufferCount + 0.5) frames, so we need to triple buffer the resources that get modified each frame
 static const int backBufferCount = 3;
@@ -32,204 +33,189 @@ static const int backBufferCount = 3;
 #define USE_VID_MEM true
 
 using namespace CAULDRON_DX12;
-
+using namespace SSSR_SAMPLE_DX12;
 //
 // This class deals with the GPU side of the sample.
 //
 class SampleRenderer
 {
 public:
-    struct State
-    {
-        float time;
-        Camera camera;
+	struct State
+	{
+		float time;
+		Camera camera;
 
-        float exposure;
-        float emmisiveFactor;
-        float iblFactor;
-        float lightIntensity;
-        XMFLOAT3 lightColor;
-        Camera lightCamera;
+		float exposure;
+		float emmisiveFactor;
+		float iblFactor;
+		float lightIntensity;
+		XMFLOAT3 lightColor;
+		Camera lightCamera;
 
-        int   toneMapper;
-        int   skyDomeType;
-        bool  bDrawBoundingBoxes;
-        bool  bDrawLightFrustum;
-        bool  bDrawBloom;
-        bool  bDrawScreenSpaceReflections;
+		int   toneMapper;
+		int   skyDomeType;
+		bool  bDrawBoundingBoxes;
+		bool  bDrawLightFrustum;
+		bool  bDrawBloom;
+		bool  bDrawScreenSpaceReflections;
 
-        float targetFrametime;
+		float targetFrametime;
 
-        bool bShowIntersectionResults;
-        float temporalStability;
-        int maxTraversalIterations;
-        int mostDetailedDepthHierarchyMipLevel;
-        float depthBufferThickness;
-        int minTraversalOccupancy;
-        int samplesPerQuad;
-        bool bEnableVarianceGuidedTracing;
-        float roughnessThreshold;
+		bool bShowIntersectionResults;
+		float temporalStability;
+		float temporalVarianceThreshold;
+		int maxTraversalIterations;
+		int mostDetailedDepthHierarchyMipLevel;
+		float depthBufferThickness;
+		int minTraversalOccupancy;
+		int samplesPerQuad;
+		bool bEnableVarianceGuidedTracing;
+		float roughnessThreshold;
 
-        float tileClassificationTime;
-        float intersectionTime;
-        float denoisingTime;
+		float tileClassificationTime;
+		float intersectionTime;
+		float denoisingTime;
 
-        bool showReflectionTarget;
-        bool isBenchmarking;
-        const std::string* screenshotName;
-    };
+		bool showReflectionTarget;
+		bool isBenchmarking;
+		const std::string* screenshotName;
+	};
 
-    void OnCreate(Device* pDevice, SwapChain *pSwapChain);
-    void OnDestroy();
+	void OnCreate(Device* pDevice, SwapChain* pSwapChain);
+	void OnDestroy();
 
-    void OnCreateWindowSizeDependentResources(SwapChain *pSwapChain, uint32_t Width, uint32_t Height);
-    void OnDestroyWindowSizeDependentResources();
+	void OnCreateWindowSizeDependentResources(SwapChain* pSwapChain, uint32_t Width, uint32_t Height);
+	void OnDestroyWindowSizeDependentResources();
 
-    int LoadScene(GLTFCommon *pGLTFCommon, int stage = 0);
-    void UnloadScene();
+	int LoadScene(GLTFCommon* pGLTFCommon, int stage = 0);
+	void UnloadScene();
 
-    const std::vector<TimeStamp> &GetTimingValues() { return m_TimeStamps; }
+	const std::vector<TimeStamp>& GetTimingValues() { return m_TimeStamps; }
 
-    void OnRender(State *pState, SwapChain *pSwapChain);
-
-private:
-    void CreateApplyReflectionsPipeline();
-    void CreateDepthDownsamplePipeline();
-    void StallFrame(float targetFrametime);
-    void BeginFrame();
-
-    per_frame * FillFrameConstants(State * pState);
-    void RenderSpotLights(ID3D12GraphicsCommandList * pCmdLst1, per_frame * pPerFrame);
-    void RenderMotionVectors(ID3D12GraphicsCommandList * pCmdLst1, per_frame * pPerFrame, State * pState);
-    void RenderSkydome(ID3D12GraphicsCommandList * pCmdLst1, per_frame * pPerFrame, State * pState);
-    void RenderLightFrustums(ID3D12GraphicsCommandList * pCmdLst1, per_frame * pPerFrame, State * pState);
-    void DownsampleDepthBuffer(ID3D12GraphicsCommandList * pCmdLst1);
-    void RenderScreenSpaceReflections(ID3D12GraphicsCommandList * pCmdLst1, State * pState);
-    void CopyHistorySurfaces(ID3D12GraphicsCommandList * pCmdLst1);
-    void ApplyReflectionTarget(ID3D12GraphicsCommandList * pCmdLst1, State * pState);
-    void DownsampleScene(ID3D12GraphicsCommandList * pCmdLst1);
-    void RenderBloom(ID3D12GraphicsCommandList * pCmdLst1);
-    void ApplyTonemapping(ID3D12GraphicsCommandList * pCmdLst2, State * pState, SwapChain * pSwapChain);
-    void RenderHUD(ID3D12GraphicsCommandList * pCmdLst2, SwapChain * pSwapChain);
-    void CopyToTexture(ID3D12GraphicsCommandList * cl, ID3D12Resource * source, ID3D12Resource * target);
+	void OnRender(State* pState, SwapChain* pSwapChain);
+	void Recompile();
 
 private:
-    Device *                        m_pDevice;
+	void CreateApplyReflectionsPipeline();
+	void CreateDepthDownsamplePipeline();
+	void StallFrame(float targetFrametime);
+	void BeginFrame();
 
-    uint32_t                        m_Width;
-    uint32_t                        m_Height;
+	per_frame* FillFrameConstants(State* pState);
+	void RenderSpotLights(ID3D12GraphicsCommandList* pCmdLst1, per_frame* pPerFrame);
+	void RenderMotionVectors(ID3D12GraphicsCommandList* pCmdLst1, per_frame* pPerFrame, State* pState);
+	void RenderSkydome(ID3D12GraphicsCommandList* pCmdLst1, per_frame* pPerFrame, State* pState);
+	void RenderLightFrustums(ID3D12GraphicsCommandList* pCmdLst1, per_frame* pPerFrame, State* pState);
+	void DownsampleDepthBuffer(ID3D12GraphicsCommandList* pCmdLst1);
+	void RenderScreenSpaceReflections(ID3D12GraphicsCommandList* pCmdLst1, per_frame* pPerFrame, State* pState);
+	void CopyHistorySurfaces(ID3D12GraphicsCommandList* pCmdLst1);
+	void ApplyReflectionTarget(ID3D12GraphicsCommandList* pCmdLst1, State* pState);
+	void DownsampleScene(ID3D12GraphicsCommandList* pCmdLst1);
+	void RenderBloom(ID3D12GraphicsCommandList* pCmdLst1);
+	void ApplyTonemapping(ID3D12GraphicsCommandList* pCmdLst2, State* pState, SwapChain* pSwapChain);
+	void RenderHUD(ID3D12GraphicsCommandList* pCmdLst2, SwapChain* pSwapChain);
 
-    D3D12_VIEWPORT                  m_Viewport;
-    D3D12_RECT                      m_Scissor;
+private:
+	Device* m_pDevice;
 
-    // Initialize helper classes
-    ResourceViewHeaps               m_ResourceViewHeaps;
-    StaticResourceViewHeap          m_CpuVisibleHeap;
-    UploadHeap                      m_UploadHeap;
-    DynamicBufferRing               m_ConstantBufferRing;
-    StaticBufferPool                m_VidMemBufferPool;
-    CommandListRing                 m_CommandListRing;
-    GPUTimestamps                   m_GPUTimer;
+	uint32_t                        m_Width;
+	uint32_t                        m_Height;
 
+	D3D12_VIEWPORT                  m_Viewport;
+	D3D12_RECT                      m_Scissor;
 
-    //gltf passes
-    GltfPbrPass *                   m_gltfPBR;
-    GltfBBoxPass *                  m_gltfBBox;
-    GltfDepthPass *                 m_gltfDepth;
-    GltfMotionVectorsPass *         m_gltfMotionVectors;
-    GLTFTexturesAndBuffers *        m_pGLTFTexturesAndBuffers;
+	// Initialize helper classes
+	ResourceViewHeaps               m_ResourceViewHeaps;
+	StaticResourceViewHeap          m_CpuVisibleHeap;
+	UploadHeap                      m_UploadHeap;
+	DynamicBufferRing               m_ConstantBufferRing;
+	StaticBufferPool                m_VidMemBufferPool;
+	CommandListRing                 m_CommandListRing;
+	GPUTimestamps                   m_GPUTimer;
 
-    // effects
-    Bloom                           m_Bloom;
-    SkyDome                         m_SkyDome;
-    SkyDome                         m_AmbientLight;
-    DownSamplePS                    m_DownSample;
-    SkyDomeProc                     m_SkyDomeProc;
-    ToneMapping                     m_ToneMapping;
+	//gltf passes
+	GltfPbrPass* m_gltfPBR;
+	GltfBBoxPass* m_gltfBBox;
+	GltfDepthPass* m_gltfDepth;
+	GltfMotionVectorsPass* m_gltfMotionVectors;
+	GLTFTexturesAndBuffers* m_pGLTFTexturesAndBuffers;
 
-    // BRDF LUT
-    Texture                         m_BrdfLut;
+	// effects
+	Bloom                           m_Bloom;
+	SkyDome                         m_SkyDome;
+	SkyDome                         m_AmbientLight;
+	DownSamplePS                    m_DownSample;
+	SkyDomeProc                     m_SkyDomeProc;
+	ToneMapping                     m_ToneMapping;
 
-    // GUI
-    ImGUI                           m_ImGUI;
+	//SSSR
+	SSSR m_Sssr;
+	uint32_t m_frame_index = 0;
+	XMMATRIX m_prev_view_projection;
 
-    // Temporary render targets
+	// BRDF LUT
+	Texture                         m_BrdfLut;
 
-    // depth buffer
-    DSV                             m_DepthBufferDSV;
-    Texture                         m_DepthBuffer;
+	// GUI
+	ImGUI                           m_ImGUI;
 
-    // Motion Vectors resources
-    Texture                         m_MotionVectors;
-    RTV                             m_MotionVectorsRTV;
-    CBV_SRV_UAV                     m_MotionVectorsSRV;
-    CBV_SRV_UAV                     m_MotionVectorsInputsSRV;
+	// depth buffer
+	DSV                             m_DepthBufferDSV;
+	Texture                         m_DepthBuffer;
 
-    // Normal buffer
-    Texture                         m_NormalBuffer;
-    RTV                             m_NormalBufferRTV;
-    CBV_SRV_UAV                     m_NormalBufferSRV;
-    Texture                         m_NormalHistoryBuffer;
+	// Motion Vectors resources
+	Texture                         m_MotionVectors;
+	RTV                             m_MotionVectorsRTV;
+	CBV_SRV_UAV                     m_MotionVectorsSRV;
+	CBV_SRV_UAV                     m_MotionVectorsInputsSRV;
 
-    // Specular roughness target
-    Texture                         m_SpecularRoughness;
-    RTV                             m_SpecularRoughnessRTV;
-    Texture                         m_SpecularRoughnessHistory;
+	// Normal buffer
+	Texture                         m_NormalBuffer;
+	RTV                             m_NormalBufferRTV;
+	CBV_SRV_UAV                     m_NormalBufferSRV;
+	Texture                         m_NormalHistoryBuffer;
 
-    // shadowmaps
-    Texture                         m_ShadowMap;
-    DSV                             m_ShadowMapDSV;
-    CBV_SRV_UAV                     m_ShadowMapSRV;
+	// Specular roughness target
+	Texture                         m_SpecularRoughness;
+	RTV                             m_SpecularRoughnessRTV;
 
-    // Resolved RT
-    Texture                         m_HDR;
-    CBV_SRV_UAV                     m_HDRSRV;
-    RTV                             m_HDRRTV;
+	// shadowmaps
+	Texture                         m_ShadowMap;
+	DSV                             m_ShadowMapDSV;
+	CBV_SRV_UAV                     m_ShadowMapSRV;
 
-    // widgets
-    Wireframe                       m_Wireframe;
-    WireframeBox                    m_WireframeBox;
+	// Resolved RT
+	Texture                         m_HDR;
+	CBV_SRV_UAV                     m_HDRSRV;
+	RTV                             m_HDRRTV;
 
-    std::vector<TimeStamp>          m_TimeStamps;
+	// widgets
+	Wireframe                       m_Wireframe;
+	WireframeBox                    m_WireframeBox;
 
-    // FFX SSSR Effect
-    FfxSssrContext                     m_SssrContext;
-    FfxSssrReflectionView              m_SssrReflectionView;
-    bool                            m_SssrCreatedReflectionView = false;
-    CBV_SRV_UAV                     m_SssrSceneSRV;
-    CBV_SRV_UAV                     m_SssrDepthBufferHierarchySRV;
-    CBV_SRV_UAV                     m_SssrMotionBufferSRV;
-    CBV_SRV_UAV                     m_SssrNormalBufferSRV;
-    CBV_SRV_UAV                     m_SssrRoughnessBufferSRV;
-    CBV_SRV_UAV                     m_SssrNormalHistoryBufferSRV;
-    CBV_SRV_UAV                     m_SssrRoughnessHistoryBufferSRV;
-    CBV_SRV_UAV                     m_SssrOutputBufferUAV;
-    CBV_SRV_UAV                     m_SssrOutputBufferUAVGPU;
-    CBV_SRV_UAV                     m_SssrEnvironmentMapSRV;
-    D3D12_SAMPLER_DESC              m_SssrEnvironmentMapSamplerDesc;
-    Texture                         m_SssrOutputBuffer;
+	std::vector<TimeStamp>          m_TimeStamps;
 
-    RTV                             m_ApplyPipelineRTV;
-    ID3D12RootSignature *           m_ApplyRootSignature;
-    ID3D12PipelineState *           m_ApplyPipelineState;
-    CBV_SRV_UAV                     m_ApplyPassDescriptorTable;
+	RTV                             m_ApplyPipelineRTV;
+	ID3D12RootSignature* m_ApplyRootSignature;
+	ID3D12PipelineState* m_ApplyPipelineState;
+	CBV_SRV_UAV                     m_ApplyPassDescriptorTable;
 
-    // Depth downsampling with single CS
-    ID3D12RootSignature *           m_DownsampleRootSignature;
-    ID3D12PipelineState *           m_DownsamplePipelineState;
-    D3D12_GPU_DESCRIPTOR_HANDLE     m_DownsampleDescriptorTable;
-    CBV_SRV_UAV                     m_DepthBufferDescriptor;
-    CBV_SRV_UAV                     m_DepthHierarchyDescriptors[13];
-    CBV_SRV_UAV                     m_AtomicCounterUAVGPU;
-    Texture                         m_DepthHierarchy;
-    Texture                         m_AtomicCounter;
-    CBV_SRV_UAV                     m_AtomicCounterUAV;
-    UINT                            m_DepthMipLevelCount = 0;
+	// Depth downsampling with single CS
+	ID3D12RootSignature* m_DownsampleRootSignature;
+	ID3D12PipelineState* m_DownsamplePipelineState;
+	D3D12_GPU_DESCRIPTOR_HANDLE     m_DownsampleDescriptorTable;
+	CBV_SRV_UAV                     m_DepthBufferDescriptor;
+	CBV_SRV_UAV                     m_DepthHierarchyDescriptors[13];
+	CBV_SRV_UAV                     m_AtomicCounterUAVGPU;
+	Texture                         m_DepthHierarchy;
+	Texture                         m_AtomicCounter;
+	CBV_SRV_UAV                     m_AtomicCounterUAV;
+	UINT                            m_DepthMipLevelCount = 0;
 
-    UINT64                          m_GpuTicksPerSecond;
+	UINT64                          m_GpuTicksPerSecond;
 
-    SaveTexture                     m_SaveTexture;
+	SaveTexture                     m_SaveTexture;
 
-    // For multithreaded texture loading
-    AsyncPool                       m_AsyncPool;
+	// For multithreaded texture loading
+	AsyncPool                       m_AsyncPool;
 };

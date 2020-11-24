@@ -39,6 +39,7 @@ package_sample:
     - build_dx12
     - build_vk
   script:
+  - xcopy .\ffx-dnsr\docs\*.pdf .\docs /sy
   - echo "Packaging build"
   - echo cd .\sample\bin\ > %SampleName%_DX12.bat
   - echo start %SampleName%_DX12.exe >> %SampleName%_DX12.bat  
