@@ -1,0 +1,34 @@
+{
+    "globals": {
+        "CpuValidationLayerEnabled": false,
+        "GpuValidationLayerEnabled": false,
+        "presentationMode": 0,
+        "width": 1920,
+        "height": 1080,
+        "activeScene": 0,
+        "benchmark": false,
+        "vsync": false,
+        "stablePowerState": false,
+        "FreesyncHDROptionEnabled": false,
+        "fontsize": 13
+    },
+    "scenes": [
+        {
+            "name": "Chess",
+            "directory": "..\\media\\Chess\\",
+            "filename": "scene.gltf",
+            "TAA": true,
+            "Bloom": false,
+            "toneMapper": 2,
+            "iblFactor": 0.0,
+            "emmisiveFactor": 1,
+            "intensity": 10,
+            "exposure": 1,
+            "activeCamera": 1,
+            "camera": {
+                "defaultFrom": [ 1, 0.23, 0.23 ],
+                "defaultTo": [ 0, 0, 0 ]
+            }
+        }
+    ]
+}

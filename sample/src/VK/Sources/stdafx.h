@@ -18,9 +18,8 @@
 
 #include "vulkan/vulkan.h"
 
-// we are using DirectXMath
-#include <DirectXMath.h>
-using namespace DirectX;
+// Pull in math library
+#include "../../libs/vectormath/vectormath.hpp"
 
 // TODO: reference additional headers your program requires here
 #include "Base/Imgui.h"
@@ -28,36 +27,42 @@ using namespace DirectX;
 #include "Base/Device.h"
 #include "Base/Helper.h"
 #include "Base/Texture.h"
+#include "Base/FrameworkWindows.h"
+#include "Base/FreeSyncHDR.h"
 #include "Base/SwapChain.h"
 #include "Base/UploadHeap.h"
 #include "Base/GPUTimeStamps.h"
-#include "Base/ExtDebugMarkers.h"
 #include "Base/CommandListRing.h"
 #include "Base/StaticBufferPool.h"
 #include "Base/DynamicBufferRing.h"
 #include "Base/ResourceViewHeaps.h"
+#include "Base/ShaderCompilerCache.h"
 #include "Base/ShaderCompilerHelper.h"
 
-#include "Misc/Misc.h"
-#include "Misc/Camera.h"
-#include "Misc/FrameworkWindows.h"
-
-#include "PostProc/Bloom.h"
-#include "PostProc/BlurPS.h"
-#include "PostProc/SkyDome.h"
-#include "PostProc/ToneMapping.h"
-#include "PostProc/SkyDomeProc.h"
-#include "PostProc/DownSamplePS.h"
-#include "PostProc/PostProcCS.h"
 
 #include "GLTF/GltfPbrPass.h"
 #include "GLTF/GltfBBoxPass.h"
 #include "GLTF/GltfDepthPass.h"
-#include "GLTF/GltfMotionVectorsPass.h"
+
+#include "Misc/Misc.h"
+#include "Misc/Camera.h"
+
+#include "PostProc/TAA.h"
+#include "PostProc/Bloom.h"
+#include "PostProc/BlurPS.h"
+#include "PostProc/SkyDome.h"
+#include "PostProc/ToneMapping.h"
+#include "PostProc/ToneMappingCS.h"
+#include "PostProc/ColorConversionPS.h"
+#include "PostProc/SkyDomeProc.h"
+#include "PostProc/DownSamplePS.h"
+
 
 #include "Widgets/Axis.h"
 #include "Widgets/CheckerBoardFloor.h"
 #include "Widgets/WireframeBox.h"
 #include "Widgets/WireframeSphere.h"
+
+
 
 using namespace CAULDRON_VK;

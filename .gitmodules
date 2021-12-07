@@ -4,3 +4,6 @@
 [submodule "ffx-dnsr"]
 	path = ffx-dnsr
 	url = ../../GPUOpen-Effects/FidelityFX-Denoiser.git
+[submodule "ffx-spd"]
+	path = ffx-spd
+	url = ../../GPUOpen-Effects/FidelityFX-SPD.git

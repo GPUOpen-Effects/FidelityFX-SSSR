@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,8 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-static const float g_roughness_sigma_min = 0.001f;
-static const float g_roughness_sigma_max = 0.01f;
+static const float g_roughness_sigma_min = 0.01f;
+static const float g_roughness_sigma_max = 0.02f;
 static const float g_depth_sigma = 0.02f;
 
 [[vk::binding(0, 0)]] cbuffer Constants : register(b0) {
@@ -31,15 +31,16 @@ static const float g_depth_sigma = 0.02f;
     float4x4 g_view;
     float4x4 g_inv_view;
     float4x4 g_prev_view_proj;
-
+    uint2 g_buffer_dimensions;
+    float2 g_inv_buffer_dimensions;
+    float g_temporal_stability_factor;
+    float g_depth_buffer_thickness;
+    float g_roughness_threshold;
+    float g_temporal_variance_threshold;
     uint g_frame_index;
     uint g_max_traversal_intersections;
     uint g_min_traversal_occupancy;
     uint g_most_detailed_mip;
-    float g_temporal_stability_factor;
-    float g_temporal_variance_threshold;
-    float g_depth_buffer_thickness;
-    float g_roughness_threshold;
     uint g_samples_per_quad;
     uint g_temporal_variance_guided_tracing_enabled;
 };
@@ -79,7 +80,7 @@ void UnpackRayCoords(uint packed, out uint2 ray_coord, out bool copy_horizontal,
 // Transforms origin to uv space
 // Mat must be able to transform origin from its current space into clip space.
 float3 ProjectPosition(float3 origin, float4x4 mat) {
-    float4 projected = mul(float4(origin, 1), mat);
+    float4 projected = mul(mat, float4(origin, 1));
     projected.xyz /= projected.w;
     projected.xy = 0.5 * projected.xy + 0.5;
     projected.y = (1 - projected.y);
@@ -96,7 +97,7 @@ float3 ProjectDirection(float3 origin, float3 direction, float3 screen_space_ori
 float3 InvProjectPosition(float3 coord, float4x4 mat) {
     coord.y = (1 - coord.y);
     coord.xy = 2 * coord.xy - 1;
-    float4 projected = mul(float4(coord, 1), mat);
+    float4 projected = mul(mat, float4(coord, 1));
     projected.xyz /= projected.w;
     return projected.xyz;
 }
@@ -116,9 +117,24 @@ float3 FFX_DNSR_Reflections_ScreenSpaceToViewSpace(float3 screen_uv_coord) {
 }
 
 float3 FFX_DNSR_Reflections_ViewSpaceToWorldSpace(float4 view_space_coord) {
-    return mul(view_space_coord, g_inv_view).xyz;
+    return mul(g_inv_view, view_space_coord).xyz;
 }
 
-float3 FFX_DNSR_Reflections_WorldSpaceToScreenSpacePrevious(float3 world_coord) {
-    return ProjectPosition(world_coord, g_prev_view_proj);
+float3 FFX_DNSR_Reflections_WorldSpaceToScreenSpacePrevious(float3 world_space_pos) {
+    return ProjectPosition(world_space_pos, g_prev_view_proj);
+}
+
+float FFX_DNSR_Reflections_GetLinearDepth(float2 uv, float depth) {
+    const float3 view_space_pos = InvProjectPosition(float3(uv, depth), g_inv_proj);
+    return abs(view_space_pos.z);
+}
+
+uint FFX_DNSR_Reflections_RoundedDivide(uint value, uint divisor) {
+    return (value + divisor - 1) / divisor;
+}
+
+uint FFX_DNSR_Reflections_GetTileMetaDataIndex(uint2 pixel_pos, uint screen_width) {
+    uint2 tile_index = uint2(pixel_pos.x / 8, pixel_pos.y / 8);
+    uint flattened = tile_index.y * FFX_DNSR_Reflections_RoundedDivide(screen_width, 8) + tile_index.x;
+    return flattened;
 }

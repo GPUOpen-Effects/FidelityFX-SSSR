@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -29,12 +29,12 @@ namespace SSSR_SAMPLE_VK
 		The constructor for the BufferVK class.
 	*/
 	BufferVK::BufferVK()
-		: buffer_(VK_NULL_HANDLE)
-		, device_(VK_NULL_HANDLE)
-		, memory_(VK_NULL_HANDLE)
-		, buffer_view_(VK_NULL_HANDLE)
-		, mappable_(false)
-		, mapped_(false)
+		: m_buffer(VK_NULL_HANDLE)
+		, m_device(VK_NULL_HANDLE)
+		, m_memory(VK_NULL_HANDLE)
+		, m_bufferView(VK_NULL_HANDLE)
+		, m_mappable(false)
+		, m_mapped(false)
 	{
 	}
 
@@ -48,122 +48,122 @@ namespace SSSR_SAMPLE_VK
 
 	void BufferVK::OnDestroy()
 	{
-		if (mapped_)
+		if (m_mapped)
 		{
 			Unmap();
 		}
 
-		if (buffer_)
+		if (m_buffer)
 		{
-			vkDestroyBuffer(device_, buffer_, nullptr);
-			buffer_ = VK_NULL_HANDLE;
+			vkDestroyBuffer(m_device, m_buffer, nullptr);
+			m_buffer = VK_NULL_HANDLE;
 		}
 
-		if (memory_)
+		if (m_memory)
 		{
-			vkFreeMemory(device_, memory_, nullptr);
-			memory_ = VK_NULL_HANDLE;
+			vkFreeMemory(m_device, m_memory, nullptr);
+			m_memory = VK_NULL_HANDLE;
 		}
 
-		if (buffer_view_)
+		if (m_bufferView)
 		{
-			vkDestroyBufferView(device_, buffer_view_, nullptr);
-			buffer_view_ = VK_NULL_HANDLE;
+			vkDestroyBufferView(m_device, m_bufferView, nullptr);
+			m_bufferView = VK_NULL_HANDLE;
 		}
 
-		device_ = VK_NULL_HANDLE;
+		m_device = VK_NULL_HANDLE;
 	}
 
 	/**
 		The constructor for the BufferVK class.
 
 		\param device The VkDevice that creates the buffer view.
-		\param physical_device The VkPhysicalDevice to determine the right memory heap.
-		\param create_info The CreateInfo struct.
+		\param physicalDevice The VkPhysicalDevice to determine the right memory heap.
+		\param createInfo The CreateInfo struct.
 	*/
-	BufferVK::BufferVK(VkDevice device, VkPhysicalDevice physical_device, const CreateInfo& create_info)
-		: device_(device)
-		, buffer_(VK_NULL_HANDLE)
-		, memory_(VK_NULL_HANDLE)
-		, buffer_view_(VK_NULL_HANDLE)
-		, mappable_(false)
-		, mapped_(false)
+	BufferVK::BufferVK(VkDevice device, VkPhysicalDevice physicalDevice, const CreateInfo& createInfo, const char* name)
+		: m_device(device)
+		, m_buffer(VK_NULL_HANDLE)
+		, m_memory(VK_NULL_HANDLE)
+		, m_bufferView(VK_NULL_HANDLE)
+		, m_mappable(false)
+		, m_mapped(false)
 	{
-		VkBufferCreateInfo buffer_create_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
-		buffer_create_info.pNext = nullptr;
-		buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		buffer_create_info.size = create_info.size_in_bytes_;
-		buffer_create_info.usage = create_info.buffer_usage_;
-		VkResult vkResult = vkCreateBuffer(device_, &buffer_create_info, nullptr, &buffer_);
+		VkBufferCreateInfo bufferCreateInfo = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+		bufferCreateInfo.pNext = nullptr;
+		bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		bufferCreateInfo.size = createInfo.sizeInBytes;
+		bufferCreateInfo.usage = createInfo.bufferUsage;
+		VkResult vkResult = vkCreateBuffer(m_device, &bufferCreateInfo, nullptr, &m_buffer);
 		assert(VK_SUCCESS == vkResult);
 
-		VkMemoryRequirements memory_requirements = {};
-		vkGetBufferMemoryRequirements(device_, buffer_, &memory_requirements);
+		VkMemoryRequirements memoryRequirements = {};
+		vkGetBufferMemoryRequirements(m_device, m_buffer, &memoryRequirements);
 
-		VkPhysicalDeviceMemoryProperties memory_properties = {};
-		vkGetPhysicalDeviceMemoryProperties(physical_device, &memory_properties);
+		VkPhysicalDeviceMemoryProperties memoryProperties = {};
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
 
 		// find the right memory type for this image
-		int memory_type_index = -1;
-		for (uint32_t i = 0; i < memory_properties.memoryTypeCount; ++i)
+		int memoryTypeIndex = -1;
+		for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
 		{
-			const VkMemoryType& memory_type = memory_properties.memoryTypes[i];
-			bool has_required_properties = memory_type.propertyFlags & create_info.memory_property_flags;
-			bool is_required_memory_type = memory_requirements.memoryTypeBits & (1 << i);
-			if (has_required_properties && is_required_memory_type)
+			const VkMemoryType& memoryType = memoryProperties.memoryTypes[i];
+			bool hasRequiredProperties = memoryType.propertyFlags & createInfo.memoryPropertyFlags;
+			bool isRequiredMemoryType = memoryRequirements.memoryTypeBits & (1 << i);
+			if (hasRequiredProperties && isRequiredMemoryType)
 			{
-				memory_type_index = i;
+				memoryTypeIndex = i;
 				break;
 			}
 		}
 
 		// abort if we couldn't find the right memory type
-		assert(memory_type_index != -1);
+		assert(memoryTypeIndex != -1);
 
-		if (create_info.memory_property_flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+		if (createInfo.memoryPropertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
 		{
-			mappable_ = true;
-			mapped_ = false;
+			m_mappable = true;
+			m_mapped = false;
 		}
 
-		VkMemoryAllocateInfo memory_allocate_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
-		memory_allocate_info.pNext = nullptr;
-		memory_allocate_info.allocationSize = memory_requirements.size;
-		memory_allocate_info.memoryTypeIndex = memory_type_index;
+		VkMemoryAllocateInfo memoryAllocateInfo = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+		memoryAllocateInfo.pNext = nullptr;
+		memoryAllocateInfo.allocationSize = memoryRequirements.size;
+		memoryAllocateInfo.memoryTypeIndex = memoryTypeIndex;
 
-		vkResult = vkAllocateMemory(device_, &memory_allocate_info, nullptr, &memory_);
+		vkResult = vkAllocateMemory(m_device, &memoryAllocateInfo, nullptr, &m_memory);
 		assert(VK_SUCCESS == vkResult);
-		vkResult = vkBindBufferMemory(device_, buffer_, memory_, 0);
+		vkResult = vkBindBufferMemory(m_device, m_buffer, m_memory, 0);
 		assert(VK_SUCCESS == vkResult);
 
 
 		PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectName = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
 		if (vkSetDebugUtilsObjectName)
 		{
-			VkDebugUtilsObjectNameInfoEXT object_name_info = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
-			object_name_info.pNext = nullptr;
-			object_name_info.objectType = VK_OBJECT_TYPE_BUFFER;
-			object_name_info.objectHandle = reinterpret_cast<uint64_t>(buffer_);
-			object_name_info.pObjectName = create_info.name_;
+			VkDebugUtilsObjectNameInfoEXT objectNameInfo = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+			objectNameInfo.pNext = nullptr;
+			objectNameInfo.objectType = VK_OBJECT_TYPE_BUFFER;
+			objectNameInfo.objectHandle = reinterpret_cast<uint64_t>(m_buffer);
+			objectNameInfo.pObjectName = name;
 
-			vkResult = vkSetDebugUtilsObjectName(device, &object_name_info);
+			vkResult = vkSetDebugUtilsObjectName(device, &objectNameInfo);
 			assert(VK_SUCCESS == vkResult);
 		}
 
-		if (create_info.format_ == VK_FORMAT_UNDEFINED)
+		if (createInfo.format == VK_FORMAT_UNDEFINED)
 		{
 			return;
 		}
 
-		VkBufferViewCreateInfo buffer_view_create_info = { VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO };
-		buffer_view_create_info.pNext = nullptr;
-		buffer_view_create_info.flags = 0;
-		buffer_view_create_info.buffer = buffer_;
-		buffer_view_create_info.format = create_info.format_;
-		buffer_view_create_info.offset = 0;
-		buffer_view_create_info.range = VK_WHOLE_SIZE;
+		VkBufferViewCreateInfo bufferViewCreateInfo = { VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO };
+		bufferViewCreateInfo.pNext = nullptr;
+		bufferViewCreateInfo.flags = 0;
+		bufferViewCreateInfo.buffer = m_buffer;
+		bufferViewCreateInfo.format = createInfo.format;
+		bufferViewCreateInfo.offset = 0;
+		bufferViewCreateInfo.range = VK_WHOLE_SIZE;
 
-		vkResult = vkCreateBufferView(device_, &buffer_view_create_info, nullptr, &buffer_view_);
+		vkResult = vkCreateBufferView(m_device, &bufferViewCreateInfo, nullptr, &m_bufferView);
 		assert(VK_SUCCESS == vkResult);
 	}
 
@@ -173,19 +173,19 @@ namespace SSSR_SAMPLE_VK
 		\param other The buffer to be moved.
 	*/
 	BufferVK::BufferVK(BufferVK&& other) noexcept
-		: buffer_(other.buffer_)
-		, memory_(other.memory_)
-		, device_(other.device_)
-		, buffer_view_(other.buffer_view_)
-		, mappable_(other.mappable_)
-		, mapped_(other.mapped_)
+		: m_buffer(other.m_buffer)
+		, m_memory(other.m_memory)
+		, m_device(other.m_device)
+		, m_bufferView(other.m_bufferView)
+		, m_mappable(other.m_mappable)
+		, m_mapped(other.m_mapped)
 	{
-		other.buffer_ = VK_NULL_HANDLE;
-		other.memory_ = VK_NULL_HANDLE;
-		other.device_ = VK_NULL_HANDLE;
-		other.buffer_view_ = VK_NULL_HANDLE;
-		other.mappable_ = false;
-		other.mapped_ = false;
+		other.m_buffer = VK_NULL_HANDLE;
+		other.m_memory = VK_NULL_HANDLE;
+		other.m_device = VK_NULL_HANDLE;
+		other.m_bufferView = VK_NULL_HANDLE;
+		other.m_mappable = false;
+		other.m_mapped = false;
 	}
 
 	/**
@@ -198,19 +198,19 @@ namespace SSSR_SAMPLE_VK
 	{
 		if (this != &other)
 		{
-			buffer_ = other.buffer_;
-			memory_ = other.memory_;
-			device_ = other.device_;
-			buffer_view_ = other.buffer_view_;
-			mappable_ = other.mappable_;
-			mapped_ = other.mapped_;
+			m_buffer = other.m_buffer;
+			m_memory = other.m_memory;
+			m_device = other.m_device;
+			m_bufferView = other.m_bufferView;
+			m_mappable = other.m_mappable;
+			m_mapped = other.m_mapped;
 
-			other.buffer_ = VK_NULL_HANDLE;
-			other.memory_ = VK_NULL_HANDLE;
-			other.device_ = VK_NULL_HANDLE;
-			other.buffer_view_ = VK_NULL_HANDLE;
-			other.mappable_ = false;
-			other.mapped_ = false;
+			other.m_buffer = VK_NULL_HANDLE;
+			other.m_memory = VK_NULL_HANDLE;
+			other.m_device = VK_NULL_HANDLE;
+			other.m_bufferView = VK_NULL_HANDLE;
+			other.m_mappable = false;
+			other.m_mapped = false;
 		}
 
 		return *this;
@@ -218,20 +218,20 @@ namespace SSSR_SAMPLE_VK
 
 	void BufferVK::Map(void** data)
 	{
-		assert(mappable_ == true);
-		assert(mapped_ == false);
+		assert(m_mappable == true);
+		assert(m_mapped == false);
 
-		VkResult vkResult = vkMapMemory(device_, memory_, 0, VK_WHOLE_SIZE, 0, data);
+		VkResult vkResult = vkMapMemory(m_device, m_memory, 0, VK_WHOLE_SIZE, 0, data);
 		assert(VK_SUCCESS == vkResult);
 
-		mapped_ = true;
+		m_mapped = true;
 	}
 
 	void BufferVK::Unmap()
 	{
-		assert(mappable_ == true);
-		assert(mapped_ == true);
-		vkUnmapMemory(device_, memory_);
-		mapped_ = false;
+		assert(m_mappable == true);
+		assert(m_mapped == true);
+		vkUnmapMemory(m_device, m_memory);
+		m_mapped = false;
 	}
 }

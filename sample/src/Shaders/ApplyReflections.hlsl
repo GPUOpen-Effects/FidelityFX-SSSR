@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,14 +20,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 
-[[vk::binding(0)]] Texture2D<float4> reflectionTarget              : register(t0);
-[[vk::binding(1)]] Texture2D<float4> normalsTexture                : register(t1);
-[[vk::binding(2)]] Texture2D<float4> specularRoughnessTexture      : register(t2);
-[[vk::binding(3)]] Texture2D<float4> brdfTexture                   : register(t3);
+[[vk::binding(0, 1)]] Texture2D<float4> reflectionTarget              : register(t0);
+[[vk::binding(1, 1)]] Texture2D<float4> normalsTexture                : register(t1);
+[[vk::binding(2, 1)]] Texture2D<float4> specularRoughnessTexture      : register(t2);
+[[vk::binding(3, 1)]] Texture2D<float4> brdfTexture                   : register(t3);
 
-[[vk::binding(4)]] SamplerState linearSampler : register(s0);
+[[vk::binding(4, 1)]] SamplerState linearSampler : register(s0);
 
-[[vk::binding(5)]] cbuffer Constants : register(b0){
+[[vk::binding(0, 0)]] cbuffer Constants : register(b0){
     float4 viewDirection;
     uint showReflectionTarget;
     uint drawReflections;
@@ -80,7 +80,7 @@ float4 ps_main(VertexOut input) : SV_Target0
     else if (drawReflections == 1)
     {
         radiance = getIBLContribution(perceptualRoughness, specularColor, radiance, normal, view);
-        return float4(radiance, 1); // Show the reflections applied to the scene
+        return float4(2.0 * radiance, 1); // Show the reflections applied to the scene
     }
     else
     {

@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,6 @@ THE SOFTWARE.
 #pragma once
 
 #include <vulkan/vulkan.h>
-
 namespace SSSR_SAMPLE_VK
 {
 	/**
@@ -31,22 +30,19 @@ namespace SSSR_SAMPLE_VK
 	class BufferVK
 	{
 	public:
-
-		class CreateInfo
+		struct CreateInfo
 		{
-		public:
-			VkDeviceSize size_in_bytes_;
-			VkMemoryPropertyFlags memory_property_flags;
-			VkBufferUsageFlags buffer_usage_;
-			VkFormat format_;
-			const char* name_;
+			VkDeviceSize sizeInBytes;
+			VkMemoryPropertyFlags memoryPropertyFlags;
+			VkBufferUsageFlags bufferUsage;
+			VkFormat format;
 		};
 
 		BufferVK();
 		~BufferVK();
 		void OnDestroy();
 
-		BufferVK(VkDevice device, VkPhysicalDevice physical_device, const CreateInfo& create_info);
+		BufferVK(VkDevice device, VkPhysicalDevice physicalDevice, const CreateInfo& createInfo, const char* name);
 
 		BufferVK(BufferVK&& other) noexcept;
 		BufferVK& BufferVK::operator =(BufferVK&& other) noexcept;
@@ -54,11 +50,11 @@ namespace SSSR_SAMPLE_VK
 		void Map(void** data);
 		void Unmap();
 
-		VkDevice device_;
-		VkBuffer buffer_;
-		VkBufferView buffer_view_;
-		VkDeviceMemory memory_; // We're creating a low number of allocations for this library, so we just allocate a dedicated memory object per buffer. Normally you'd want to do sub-allocations of a larger allocation.
-		bool mappable_;
-		bool mapped_;
+		VkDevice m_device;
+		VkBuffer m_buffer;
+		VkBufferView m_bufferView;
+		VkDeviceMemory m_memory; // We're creating a low number of allocations for this library, so we just allocate a dedicated memory object per buffer. Normally you'd want to do sub-allocations of a larger allocation.
+		bool m_mappable;
+		bool m_mapped;
 	};
 }
