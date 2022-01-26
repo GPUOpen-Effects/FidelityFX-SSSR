@@ -1,7 +1,6 @@
 variables:
   SampleName: SssrSample  
   GIT_SUBMODULE_STRATEGY: normal
-  CMakeConfig: -G "Visual Studio 16 2019" -A x64
 
 stages:
   - build
@@ -13,7 +12,7 @@ build_dx12:
   - amd64
   stage: build
   script:
-  - 'cmake -S sample -B sample/build/DX12 -DGFX_API=DX12 %CMakeConfig%'
+  - 'cmake -S sample -B sample/build/DX12 -G "Visual Studio 15 2017" -A x64 -DGFX_API=DX12'
   - 'cmake --build sample/build/DX12 --config Release'
   artifacts:
       paths:
@@ -25,7 +24,7 @@ build_vk:
   - amd64
   stage: build
   script:
-  - 'cmake -S sample -B sample/build/VK -DGFX_API=VK %CMakeConfig%'
+  - 'cmake -S sample -B sample/build/VK -G "Visual Studio 15 2017" -A x64 -DGFX_API=VK'
   - 'cmake --build sample/build/VK --config Release'
   artifacts:
       paths:
@@ -40,7 +39,6 @@ package_sample:
     - build_dx12
     - build_vk
   script:
-  - copy %VULKAN_SDK%\Bin\glslc.exe .\sample\bin
   - xcopy .\ffx-dnsr\docs\*.pdf .\docs /sy
   - echo "Packaging build"
   - echo cd .\sample\bin\ > %SampleName%_DX12.bat

@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,8 +21,6 @@ THE SOFTWARE.
 ********************************************************************/
 #pragma once
 
-#include "stdafx.h"
-
 #include "Base/DynamicBufferRing.h"
 #include "Base/Texture.h"
 #include "BufferDX12.h"
@@ -39,30 +37,31 @@ namespace SSSR_SAMPLE_DX12
 		Texture* DepthHierarchy;
 		Texture* MotionVectors;
 		Texture* NormalBuffer;
+		Texture* NormalHistoryBuffer;
 		Texture* SpecularRoughness;
 		SkyDome* SkyDome;
+		bool pingPongNormal;
+		bool pingPongRoughness;
 		uint32_t outputWidth;
 		uint32_t outputHeight;
 	};
 
 	struct SSSRConstants
 	{
-		Vectormath::Matrix4 invViewProjection;
-		Vectormath::Matrix4 projection;
-		Vectormath::Matrix4 invProjection;
-		Vectormath::Matrix4 view;
-		Vectormath::Matrix4 invView;
-		Vectormath::Matrix4 prevViewProjection;
-		unsigned int bufferDimensions[2];
-		float inverseBufferDimensions[2];
-		float temporalStabilityFactor;
-		float depthBufferThickness;
-		float roughnessThreshold;
-		float varianceThreshold;
+		XMFLOAT4X4 invViewProjection;
+		XMFLOAT4X4 projection;
+		XMFLOAT4X4 invProjection;
+		XMFLOAT4X4 view;
+		XMFLOAT4X4 invView;
+		XMFLOAT4X4 prevViewProjection;
 		uint32_t frameIndex;
 		uint32_t maxTraversalIntersections;
 		uint32_t minTraversalOccupancy;
 		uint32_t mostDetailedMip;
+		float temporalStabilityFactor;
+		float temporalVarianceThreshold;
+		float depthBufferThickness;
+		float roughnessThreshold;
 		uint32_t samplesPerQuad;
 		uint32_t temporalVarianceGuidedTracingEnabled;
 	};
@@ -77,10 +76,14 @@ namespace SSSR_SAMPLE_DX12
 		void OnDestroy();
 		void OnDestroyWindowSizeDependentResources();
 
-		void Draw(ID3D12GraphicsCommandList* pCommandList, const SSSRConstants& sssrConstants, GPUTimestamps& gpuTimer, bool showIntersectResult);
-		Texture* GetOutputTexture(int frame);
-		void Recompile();
+		void Draw(ID3D12GraphicsCommandList* pCommandList, const SSSRConstants& sssrConstants, bool showIntersectResult = false);
+		Texture* GetOutputTexture();
 
+		std::uint64_t GetTileClassificationElapsedGpuTicks() const;
+		std::uint64_t GetIntersectElapsedGpuTicks() const;
+		std::uint64_t GetDenoiserElapsedGpuTicks() const;
+
+		void Recompile();
 	private:
 		void CreateResources();
 		void CreateWindowSizeDependentResources();
@@ -88,11 +91,13 @@ namespace SSSR_SAMPLE_DX12
 		void SetupClassifyTilesPass(bool allocateDescriptorTable);
 		void SetupPrepareIndirectArgsPass(bool allocateDescriptorTable);
 		void SetupIntersectionPass(bool allocateDescriptorTable);
+		void SetupResolveSpatialPass(bool allocateDescriptorTable);
 		void SetupResolveTemporalPass(bool allocateDescriptorTable);
-		void SetupPrefilterPass(bool allocateDescriptorTable);
-		void SetupReprojectPass(bool allocateDescriptorTable);
-		void SetupBlueNoisePass(bool allocateDescriptorTable);
+		void SetupBlurPass(bool allocateDescriptorTable);
 		void InitializeDescriptorTableData(const SSSRCreationInfo& input);
+		void SetupPerformanceCounters();
+		void QueryTimestamps(ID3D12GraphicsCommandList* pCommandList);
+		uint32_t GetTimestampQueryIndex() const;
 
 		Device* m_pDevice;
 		DynamicBufferRing* m_pConstantBufferRing;
@@ -106,43 +111,30 @@ namespace SSSR_SAMPLE_DX12
 
 		// Containing all rays that need to be traced.
 		Texture m_rayList;
-		Texture m_denoiserTileList;
 		// Contains the number of rays that we trace.
 		Texture m_rayCounter;
 		// Indirect arguments for intersection pass.
 		Texture m_intersectionPassIndirectArgs;
-
-		// Depth buffer of this frame
-		Texture* m_depthBuffer;
-		// Normal buffer of this frame
-		Texture* m_normalBuffer;
-		// Extracted roughness values. 
-		Texture m_extractedRoughness;
-		// Depth buffer copy from last frame.
-		Texture m_depthHistory;
-		// Normal buffer copy from last frame.
-		Texture m_normalHistory;
-		// Roughness buffer copy from last frame.
-		Texture m_roughnessHistory;
-
-		// Resources produced by the denoiser and intersection pass. Ping ponging to keep history around.
-		Texture m_radiance[2];
-		Texture m_variance[2];
-		Texture m_sampleCount[2];
-		Texture m_averageRadiance[2];
-		Texture m_reprojectedRadiance;
+		// Intermediate result of the temporal denoising pass - double buffered to keep history and aliases the intersection result.
+		Texture m_temporalDenoiserResult[2];
+		// Holds the length of each reflection ray - used for temporal reprojection.
+		Texture m_rayLengths;
+		// Holds the temporal variance of the last two frames.
+		Texture m_temporalVarianceMask;
+		// Tells us if we have to run the denoiser on a specific tile or if we just have to copy the values
+		Texture m_tileMetaDataMask;
+		// Extracted roughness values, also double buffered to keep the history. 
+		Texture m_roughnessTexture[2];
 
 		// Hold the blue noise buffers.
 		BlueNoiseSamplerD3D12 m_blueNoiseSampler;
-		Texture m_blueNoiseTexture;
-		ShaderPass m_blueNoisePass;
 
-		ShaderPass m_classifyTilesPass;
-		ShaderPass m_prepareIndirectArgsPass;
-		ShaderPass m_intersectPass;
-		ShaderPass m_resolveTemporalPass;
-		ShaderPass m_prefilterPass;
-		ShaderPass m_reprojectPass;
+		ShaderPass m_ClassifyTilesPass;
+		ShaderPass m_PrepareIndirectArgsPass;
+		ShaderPass m_IntersectPass;
+		ShaderPass m_ResolveSpatialPass;
+		ShaderPass m_ResolveTemporalPass;
+		ShaderPass m_BlurPass;
 
 		D3D12_SAMPLER_DESC m_environmentMapSamplerDesc;
 
@@ -150,7 +142,38 @@ namespace SSSR_SAMPLE_DX12
 		ID3D12CommandSignature* m_pCommandSignature;
 
 		CBV_SRV_UAV m_environmentMapSRV;
+		Texture m_outputBuffer;
 
+		uint32_t m_frameCountBeforeReuse;
 		uint32_t m_bufferIndex;
+
+		enum TimestampQuery
+		{
+			TIMESTAMP_QUERY_INIT,
+			TIMESTAMP_QUERY_TILE_CLASSIFICATION,
+			TIMESTAMP_QUERY_INTERSECTION,
+			TIMESTAMP_QUERY_DENOISING,
+
+			TIMESTAMP_QUERY_COUNT
+		};
+
+		//The type definition for an array of timestamp queries.	
+		using TimestampQueries = std::vector<TimestampQuery>;
+
+		// The query heap for the recorded timestamps.
+		ID3D12QueryHeap* m_pTimestampQueryHeap;
+		// The buffer for reading the timestamp queries.
+		ID3D12Resource* m_pTimestampQueryBuffer;
+		// The number of GPU ticks spent in the tile classification pass.
+		std::uint64_t m_tileClassificationElapsedGpuTicks;
+		// The number of GPU ticks spent in depth buffer intersection.
+		std::uint64_t m_intersectionElapsedGpuTicks;
+		// The number of GPU ticks spent denoising.
+		std::uint64_t m_denoisingElapsedGpuTicks;
+		// The array of timestamp that were queried.
+		std::vector<TimestampQueries> m_timestampQueries;
+		// The index of the active set of timestamp queries.
+		uint32_t m_timestampFrameIndex;
+		bool m_isPerformanceCountersEnabled;
 	};
 }

@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -32,7 +32,7 @@ void FFX_SSSR_InitialAdvanceRay(float3 origin, float3 direction, float3 inv_dire
     xy_plane = xy_plane * current_mip_resolution_inv + uv_offset;
 
     // o + d * t = p' => t = (p' - o) / d
-    float2 t = xy_plane * inv_direction.xy - origin.xy * inv_direction.xy;
+    float2 t = (xy_plane - origin.xy) * inv_direction.xy;
     current_t = min(t.x, t.y);
     position = origin + current_t * direction;
 }
@@ -45,7 +45,7 @@ bool FFX_SSSR_AdvanceRay(float3 origin, float3 direction, float3 inv_direction, 
 
     // Intersect ray with the half box that is pointing away from the ray origin.
     // o + d * t = p' => t = (p' - o) / d
-    float3 t = boundary_planes * inv_direction - origin * inv_direction;
+    float3 t = (boundary_planes - origin) * inv_direction;
 
     // Prevent using z plane when shooting out of the depth buffer.
 #ifdef FFX_SSSR_INVERTED_DEPTH_RANGE
@@ -66,8 +66,7 @@ bool FFX_SSSR_AdvanceRay(float3 origin, float3 direction, float3 inv_direction, 
 #endif
 
     // Decide whether we are able to advance the ray until we hit the xy boundaries or if we had to clamp it at the surface.
-    // We use the asuint comparison to avoid NaN / Inf logic, also we actually care about bitwise equality here to see if t_min is the t.z we fed into the min3 above.
-    bool skipped_tile = asuint(t_min) != asuint(t.z) && above_surface; 
+    bool skipped_tile = t_min != t.z && above_surface;
 
     // Make sure to only advance the ray if we're still above the surface.
     current_t = above_surface ? t_min : current_t;
@@ -111,12 +110,13 @@ float3 FFX_SSSR_HierarchicalRaymarch(float3 origin, float3 direction, bool is_mi
     while (i < max_traversal_intersections && current_mip >= most_detailed_mip && !exit_due_to_low_occupancy) {
         float2 current_mip_position = current_mip_resolution * position.xy;
         float surface_z = FFX_SSSR_LoadDepth(current_mip_position, current_mip);
-        exit_due_to_low_occupancy = !is_mirror && WaveActiveCountBits(true) <= min_traversal_occupancy;
         bool skipped_tile = FFX_SSSR_AdvanceRay(origin, direction, inv_direction, current_mip_position, current_mip_resolution_inv, floor_offset, uv_offset, surface_z, position, current_t);
         current_mip += skipped_tile ? 1 : -1;
         current_mip_resolution *= skipped_tile ? 0.5 : 2;
         current_mip_resolution_inv *= skipped_tile ? 2 : 0.5;
         ++i;
+
+        exit_due_to_low_occupancy = !is_mirror && WaveActiveCountBits(true) <= min_traversal_occupancy;
     }
 
     valid_hit = (i <= max_traversal_intersections);
@@ -148,7 +148,7 @@ float FFX_SSSR_ValidateHit(float3 hit, float2 uv, float3 world_space_ray_directi
     }
 
     // We check if we hit the surface from the back, these should be rejected.
-    float3 hit_normal = FFX_SSSR_LoadWorldSpaceNormal(texel_coords);
+    float3 hit_normal = FFX_SSSR_LoadNormal(texel_coords);
     if (dot(hit_normal, world_space_ray_direction) > 0) {
         return 0;
     }

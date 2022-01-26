@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -34,11 +34,10 @@ groupshared uint g_group_shared_counter;
 #define DS_FALLBACK
 
 // Define fetch and store functions
-AF4 SpdLoadSourceImage(ASU2 index, AU1 slice) { return g_depth_buffer[index].xxxx; }
-AF4 SpdLoad(ASU2 index, AU1 slice) { return g_downsampled_depth_buffer[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
-void SpdStore(ASU2 pix, AF4 outValue, AU1 index, AU1 slice) { g_downsampled_depth_buffer[index + 1][pix] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
-void SpdResetAtomicCounter(AU1 slice) { g_global_atomic[0] = 0; }
-void SpdIncreaseAtomicCounter(AU1 slice) { InterlockedAdd(g_global_atomic[0], 1, g_group_shared_counter); }
+AF4 SpdLoadSourceImage(ASU2 index) { return g_depth_buffer[index].xxxx; }
+AF4 SpdLoad(ASU2 index) { return g_downsampled_depth_buffer[6][index].xxxx; } // 5 -> 6 as we store a copy of the depth buffer at index 0
+void SpdStore(ASU2 pix, AF4 outValue, AU1 index) { g_downsampled_depth_buffer[index + 1][pix] = outValue.x; } // + 1 as we store a copy of the depth buffer at index 0
+void SpdIncreaseAtomicCounter() { InterlockedAdd(g_global_atomic[0], 1, g_group_shared_counter); }
 AU1 SpdGetAtomicCounter() { return g_group_shared_counter; }
 AF4 SpdLoadIntermediate(AU1 x, AU1 y) {
 	float f = g_group_shared_depth_values[x][y];
@@ -88,6 +87,5 @@ void main(uint3 dispatch_thread_id : SV_DispatchThreadID, uint3 group_id : SV_Gr
 		AU2(group_id.xy),
 		AU1(group_index),
 		AU1(mips_count),
-		AU1(threadgroup_count),
-		0);
+		AU1(threadgroup_count));
 }

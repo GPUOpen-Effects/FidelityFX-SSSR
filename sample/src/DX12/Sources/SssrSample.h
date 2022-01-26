@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,53 +20,65 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
 #pragma once
+#include "SampleRenderer.h"
 
-#include "base/FrameworkWindows.h"
-#include "Renderer.h"
-#include "UI.h"
-
-// This class encapsulates the 'application' and is responsible for handling window events and scene updates (simulation)
-// Rendering and rendering resource management is done by the Renderer class
+//
+// This is the main class, it manages the state of the sample and does all the high level work without touching the GPU directly.
+// This class uses the GPU via the the SampleRenderer class. We would have a SampleRenderer instance for each GPU.
+//
+// This class takes care of:
+//
+//    - loading a scene (just the CPU data)
+//    - updating the camera
+//    - keeping track of time
+//    - handling the keyboard
+//    - updating the animation
+//    - building the UI (but do not renders it)
+//    - uses the SampleRenderer to update all the state to the GPU and do the rendering
+//
 
 class SssrSample : public FrameworkWindows
 {
 public:
-    SssrSample(LPCSTR name);
-    void OnParseCommandLine(LPSTR lpCmdLine, uint32_t* pWidth, uint32_t* pHeight) override;
-    void OnCreate() override;
-    void OnDestroy() override;
-    void OnRender() override;
-    bool OnEvent(MSG msg) override;
-    void OnResize(bool resizeRender) override;
-    void OnUpdateDisplay() override;
+	SssrSample(LPCSTR name);
+	void OnCreate(HWND hWnd) override;
+	void OnDestroy() override;
+	void OnRender() override;
+	bool OnEvent(MSG msg) override;
+	void OnResize(uint32_t Width, uint32_t Height) override;
+	virtual void OnParseCommandLine(LPSTR lpCmdLine, uint32_t* pWidth, uint32_t* pHeight, bool* pbFullScreen) override;
 
-    void BuildUI();
-    void LoadScene(int sceneIndex);
-
-    void OnUpdate();
-
-    void HandleInput(const ImGuiIO& io);
-    void UpdateCamera(Camera& cam, const ImGuiIO& io);
+	void SetFullScreen(bool fullscreen);
 
 private:
+	void BuildUI();
+	void HandleInput();
+	void LoadScene(int sceneIndex);
 
-    bool                        m_bIsBenchmarking;
+	Device                      m_Device;
+	SwapChain                   m_Swapchain;
 
-    GLTFCommon* m_pGltfLoader = NULL;
-    bool                        m_loadingScene = false;
+	GLTFCommon* m_pGltfLoader = NULL;
+	bool                        m_bLoadingScene = false;
 
-    Renderer* m_pRenderer = NULL;
-    UIState                     m_UIState;
-    float                       m_fontSize;
-    Camera                      m_camera;
+	SampleRenderer* m_Node = NULL;
+	SampleRenderer::State       m_State;
 
-    float                       m_time; // Time accumulator in seconds, used for animation.
+	float                       m_Distance;
+	float                       m_Yaw;
+	float                       m_Pitch;
 
-    // json config file
-    json                        m_jsonConfigFile;
-    std::vector<std::string>    m_sceneNames;
-    int                         m_activeScene;
-    int                         m_activeCamera;
+	float                       m_Time;             // WallClock in seconds.
+	double                      m_DeltaTime;        // The elapsed time in milliseconds since the previous frame.
+	double                      m_LastFrameTime;
 
-    bool                        m_bPlay;
+	// json config file
+	json                        m_JsonConfigFile;
+	std::vector<std::string>    m_SceneNames;
+
+	bool                        m_bPlay;
+	bool                        m_bShowUI;
+
+	int                         m_CameraControlSelected;
+	int 						m_selectedScene;
 };

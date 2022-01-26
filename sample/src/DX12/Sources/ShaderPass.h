@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -27,8 +27,8 @@ namespace SSSR_SAMPLE_DX12
 	struct ShaderPass {
 		ID3D12RootSignature* pRootSignature = nullptr;
 		ID3D12PipelineState* pPipeline = nullptr;
-		CBV_SRV_UAV descriptorTables_CBV_SRV_UAV[2];
-		SAMPLER descriptorTables_Sampler[2];
+		std::vector<CBV_SRV_UAV> descriptorTables_CBV_SRV_UAV;
+		std::vector<SAMPLER> descriptorTables_Sampler;
 
 		void DestroyPipeline();
 		void OnDestroy();

@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,202 +21,325 @@ THE SOFTWARE.
 ********************************************************************/
 
 #include "stdafx.h"
-#include <intrin.h>
 
 #include "SssrSample.h"
+#include "base/ShaderCompilerCache.h"
+
+#ifdef  _DEBUG
+const bool CPU_BASED_VALIDATION_ENABLED = true;
+const bool GPU_BASED_VALIDATION_ENABLED = false;
+#else
+const bool CPU_BASED_VALIDATION_ENABLED = false;
+const bool GPU_BASED_VALIDATION_ENABLED = false;
+#endif //  _DEBUG
 
 SssrSample::SssrSample(LPCSTR name) : FrameworkWindows(name)
 {
-	m_time = 0;
+	m_DeltaTime = 0;
+	m_Distance = 0;
+	m_Pitch = 0;
+	m_Yaw = 0;
+	m_selectedScene = 0;
+
+	m_LastFrameTime = MillisecondsNow();
+	m_Time = 0;
 	m_bPlay = true;
+	m_bShowUI = true;
+
+	m_CameraControlSelected = 0; // select WASD on start up
 
 	m_pGltfLoader = NULL;
 }
 
-void SssrSample::OnParseCommandLine(LPSTR lpCmdLine, uint32_t* pWidth, uint32_t* pHeight)
+//--------------------------------------------------------------------------------------
+//
+// OnCreate
+//
+//--------------------------------------------------------------------------------------
+void SssrSample::OnCreate(HWND hWnd)
 {
-	// set some default values
-	*pWidth = 1920;
-	*pHeight = 1080;
-	m_activeScene = 0; //load the first one by default
-	m_VsyncEnabled = false;
-	m_bIsBenchmarking = false;
-	m_fontSize = 13.f; // default value overridden by a json file if available
-	m_isCpuValidationLayerEnabled = false;
-	m_isGpuValidationLayerEnabled = false;
-	m_activeCamera = 0;
-	m_stablePowerState = false;
+	// get the list of scenes
+	for (const auto& scene : m_JsonConfigFile["scenes"])
+		m_SceneNames.push_back(scene["name"]);
 
-	//read globals
-	auto process = [&](json jData)
+	DWORD dwAttrib = GetFileAttributes("..\\media\\");
+	if ((dwAttrib == INVALID_FILE_ATTRIBUTES) || ((dwAttrib & FILE_ATTRIBUTE_DIRECTORY)) == 0)
 	{
-		*pWidth = jData.value("width", *pWidth);
-		*pHeight = jData.value("height", *pHeight);
-		m_fullscreenMode = jData.value("presentationMode", m_fullscreenMode);
-		m_activeScene = jData.value("activeScene", m_activeScene);
-		m_activeCamera = jData.value("activeCamera", m_activeCamera);
-		m_isCpuValidationLayerEnabled = jData.value("CpuValidationLayerEnabled", m_isCpuValidationLayerEnabled);
-		m_isGpuValidationLayerEnabled = jData.value("GpuValidationLayerEnabled", m_isGpuValidationLayerEnabled);
-		m_VsyncEnabled = jData.value("vsync", m_VsyncEnabled);
-		m_FreesyncHDROptionEnabled = jData.value("FreesyncHDROptionEnabled", m_FreesyncHDROptionEnabled);
-		m_bIsBenchmarking = jData.value("benchmark", m_bIsBenchmarking);
-		m_stablePowerState = jData.value("stablePowerState", m_stablePowerState);
-		m_fontSize = jData.value("fontsize", m_fontSize);
-	};
-
-	//read json globals from commandline
-	//
-	try
-	{
-		if (strlen(lpCmdLine) > 0)
-		{
-			auto j3 = json::parse(lpCmdLine);
-			process(j3);
-		}
-	}
-	catch (json::parse_error)
-	{
-		Trace("Error parsing commandline\n");
+		MessageBox(NULL, "Media files not found!\n\nPlease check the readme on how to get the media files.", "Cauldron Panic!", MB_ICONERROR);
 		exit(0);
 	}
 
-	// read config file (and override values from commandline if so)
+	// Create Device
 	//
-	{
-		std::ifstream f("SSSRSample.json");
-		if (!f)
-		{
-			MessageBox(NULL, "Config file not found!\n", "Cauldron Panic!", MB_ICONERROR);
-			exit(0);
-		}
+	m_Device.OnCreate("SssrSample", "Cauldron", CPU_BASED_VALIDATION_ENABLED, GPU_BASED_VALIDATION_ENABLED, hWnd);
+	m_Device.CreatePipelineCache();
 
-		try
-		{
-			f >> m_jsonConfigFile;
-		}
-		catch (json::parse_error)
-		{
-			MessageBox(NULL, "Error parsing SSSRSample.json!\n", "Cauldron Panic!", MB_ICONERROR);
-			exit(0);
-		}
-	}
-
-
-	json globals = m_jsonConfigFile["globals"];
-	process(globals);
-
-	// get the list of scenes
-	for (const auto& scene : m_jsonConfigFile["scenes"])
-		m_sceneNames.push_back(scene["name"]);
-}
-
-void SssrSample::OnCreate()
-{
-	//init the shader compiler
+	// Init the shader compiler
 	InitDirectXCompiler();
 	CreateShaderCache();
 
+	// Create Swapchain
+	//
+	uint32_t dwNumberOfBackBuffers = 2;
+	m_Swapchain.OnCreate(&m_Device, dwNumberOfBackBuffers, hWnd);
+
 	// Create a instance of the renderer and initialize it, we need to do that for each GPU
-	m_pRenderer = new Renderer();
-	m_pRenderer->OnCreate(&m_device, &m_swapChain, m_fontSize);
+	//
+	m_Node = new SampleRenderer();
+	m_Node->OnCreate(&m_Device, &m_Swapchain);
 
 	// init GUI (non gfx stuff)
-	ImGUI_Init((void*)m_windowHwnd);
-	m_UIState.Initialize();
-
-	OnResize(true);
-	OnUpdateDisplay();
+	//
+	ImGUI_Init((void*)hWnd);
 
 	// Init Camera, looking at the origin
-	m_camera.LookAt(math::Vector4(0, 0, 5, 0), math::Vector4(0, 0, 0, 0));
+	//
+	m_Yaw = 0.0f;
+	m_Pitch = 0.0f;
+	m_Distance = 3.5f;
+
+	// init GUI state   
+	m_State.toneMapper = 2;
+	m_State.skyDomeType = 1;
+	m_State.exposure = 1.0f;
+	m_State.emmisiveFactor = 1.0f;
+	m_State.iblFactor = 1.0f;
+	m_State.bDrawBoundingBoxes = false;
+	m_State.bDrawLightFrustum = false;
+	m_State.bDrawBloom = false;
+	m_State.camera.LookAt(m_Yaw, m_Pitch, m_Distance, XMVectorSet(0, 0, 0, 0));
+	m_State.lightIntensity = 10.f;
+	m_State.lightCamera.SetFov(XM_PI / 6.0f, 1024, 1024, 0.1f, 20.0f);
+	m_State.lightCamera.LookAt(XM_PI / 2.0f, 0.58f, 3.5f, XMVectorSet(0, 0, 0, 0));
+	m_State.lightColor = XMFLOAT3(1, 1, 1);
+	m_State.targetFrametime = 0;
+	m_State.temporalStability = 0.99f;
+	m_State.temporalVarianceThreshold = 0.002f;
+	m_State.maxTraversalIterations = 128;
+	m_State.mostDetailedDepthHierarchyMipLevel = 1;
+	m_State.depthBufferThickness = 0.015f;
+	m_State.minTraversalOccupancy = 4;
+	m_State.samplesPerQuad = 1;
+	m_State.bEnableVarianceGuidedTracing = true;
+	m_State.bShowIntersectionResults = false;
+	m_State.roughnessThreshold = 0.2f;
+	m_State.showReflectionTarget = false;
+	m_State.bDrawScreenSpaceReflections = true;
+	m_State.screenshotName = NULL;
+
+	LoadScene(m_selectedScene);
 }
 
+//--------------------------------------------------------------------------------------
+//
+// OnDestroy
+//
+//--------------------------------------------------------------------------------------
 void SssrSample::OnDestroy()
 {
 	ImGUI_Shutdown();
 
-	m_device.GPUFlush();
+	m_Device.GPUFlush();
 
-	m_pRenderer->UnloadScene();
-	m_pRenderer->OnDestroyWindowSizeDependentResources();
-	m_pRenderer->OnDestroy();
+	// Fullscreen state should always be false before exiting the app.
+	m_Swapchain.SetFullScreen(false);
 
-	delete m_pRenderer;
+	m_Node->UnloadScene();
+	m_Node->OnDestroyWindowSizeDependentResources();
+	m_Node->OnDestroy();
+
+	delete m_Node;
+
+	m_Swapchain.OnDestroyWindowSizeDependentResources();
+	m_Swapchain.OnDestroy();
 
 	//shut down the shader compiler 
-	DestroyShaderCache(&m_device);
+	DestroyShaderCache(&m_Device);
 
 	if (m_pGltfLoader)
 	{
-		m_pGltfLoader->Unload();
 		delete m_pGltfLoader;
 		m_pGltfLoader = NULL;
 	}
+
+	m_Device.OnDestroy();
 }
 
+//--------------------------------------------------------------------------------------
+//
+// OnEvent, forward Win32 events to ImGUI
+//
+//--------------------------------------------------------------------------------------
 bool SssrSample::OnEvent(MSG msg)
 {
 	if (ImGUI_WndProcHandler(msg.hwnd, msg.message, msg.wParam, msg.lParam))
 		return true;
 
-	// handle function keys (F1, F2...) here, rest of the input is handled
-	// by imGUI later in HandleInput() function
-	const WPARAM& KeyPressed = msg.wParam;
-	switch (msg.message)
-	{
-	case WM_KEYUP:
-	case WM_SYSKEYUP:
-		/* WINDOW TOGGLES */
-		if (KeyPressed == VK_F1) m_UIState.bShowControlsWindow ^= 1;
-		if (KeyPressed == VK_F2) m_UIState.bShowProfilerWindow ^= 1;
-		if (KeyPressed == VK_F3) m_UIState.bShowReflectionsWindow ^= 1;
-		break;
-	}
-
 	return true;
 }
 
-void SssrSample::OnResize(bool resizeRender)
+//--------------------------------------------------------------------------------------
+//
+// SetFullScreen
+//
+//--------------------------------------------------------------------------------------
+void SssrSample::SetFullScreen(bool fullscreen)
 {
-	if (resizeRender)
-	{
-		// Destroy resources (if we are not minimized)
-		if (m_Width && m_Height && m_pRenderer)
-		{
-			m_pRenderer->OnDestroyWindowSizeDependentResources();
-			m_pRenderer->OnCreateWindowSizeDependentResources(&m_swapChain, m_Width, m_Height);
-		}
+	m_Device.GPUFlush();
 
-		m_camera.SetFov(AMD_PI_OVER_4, m_Width, m_Height, 0.1f, 1000.0f);
-	}
+	m_Swapchain.SetFullScreen(fullscreen);
 }
 
-void SssrSample::OnUpdateDisplay()
+void SssrSample::BuildUI()
 {
-	// Destroy resources (if we are not minimized)
-	if (m_pRenderer)
+	ImGuiStyle& style = ImGui::GetStyle();
+	style.FrameBorderSize = 1.0f;
+
+	bool opened = true;
+	ImGui::Begin("FidelityFX SSSR", &opened);
+
+	if (ImGui::CollapsingHeader("Info", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-		m_pRenderer->OnUpdateDisplayDependentResources(&m_swapChain);
+		ImGui::Text("Resolution       : %ix%i", m_Width, m_Height);
+	}
+
+	if (ImGui::CollapsingHeader("Controls", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		char* cameraControl[] = { "WASD", "Orbit", "cam #0", "cam #1", "cam #2", "cam #3" , "cam #4", "cam #5" };
+		if (m_CameraControlSelected >= m_pGltfLoader->m_cameras.size() + 2)
+			m_CameraControlSelected = 0;
+		ImGui::Combo("Camera", &m_CameraControlSelected, cameraControl, (int)(m_pGltfLoader->m_cameras.size() + 2));
+	}
+
+	if (ImGui::CollapsingHeader("Reflections", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::Checkbox("Draw Screen Space Reflections", &m_State.bDrawScreenSpaceReflections);
+		ImGui::Checkbox("Show Reflection Target", &m_State.showReflectionTarget);
+		ImGui::Checkbox("Show Intersection Results", &m_State.bShowIntersectionResults);
+		ImGui::SliderFloat("Target Frametime in ms", &m_State.targetFrametime, 0.0f, 50.0f);
+		ImGui::SliderInt("Max Traversal Iterations", &m_State.maxTraversalIterations, 0, 256);
+		ImGui::SliderInt("Min Traversal Occupancy", &m_State.minTraversalOccupancy, 0, 32);
+		ImGui::SliderInt("Most Detailed Level", &m_State.mostDetailedDepthHierarchyMipLevel, 0, 5);
+		ImGui::SliderFloat("Depth Buffer Thickness", &m_State.depthBufferThickness, 0.0f, 0.03f);
+		ImGui::SliderFloat("Roughness Threshold", &m_State.roughnessThreshold, 0.0f, 1.f);
+		ImGui::SliderFloat("Temporal Stability", &m_State.temporalStability, 0.8f, 0.99f);
+		ImGui::SliderFloat("Temporal Variance Threshold", &m_State.temporalVarianceThreshold, 0.0f, 0.01f);
+		ImGui::Checkbox("Enable Variance Guided Tracing", &m_State.bEnableVarianceGuidedTracing);
+
+		ImGui::Text("Samples Per Quad"); ImGui::SameLine();
+		ImGui::RadioButton("1", &m_State.samplesPerQuad, 1); ImGui::SameLine();
+		ImGui::RadioButton("2", &m_State.samplesPerQuad, 2); ImGui::SameLine();
+		ImGui::RadioButton("4", &m_State.samplesPerQuad, 4);
+
+		ImGui::Value("Tile Classification Elapsed Time", 1000 * m_State.tileClassificationTime, "%.1f us");
+		ImGui::Value("Intersection Elapsed Time", 1000 * m_State.intersectionTime, "%.1f us");
+		ImGui::Value("Denoising Elapsed Time", 1000 * m_State.denoisingTime, "%.1f us");
+	}
+
+	if (ImGui::CollapsingHeader("Profiler"))
+	{
+		const std::vector<TimeStamp>& timeStamps = m_Node->GetTimingValues();
+		if (timeStamps.size() > 0)
+		{
+			for (uint32_t i = 0; i < timeStamps.size(); i++)
+			{
+				ImGui::Text("%-22s: %7.1f", timeStamps[i].m_label.c_str(), timeStamps[i].m_microseconds);
+			}
+
+			//scrolling data and average computing
+			static float values[128];
+			values[127] = timeStamps.back().m_microseconds;
+			for (uint32_t i = 0; i < 128 - 1; i++) { values[i] = values[i + 1]; }
+			ImGui::PlotLines("", values, 128, 0, "GPU frame time (us)", 0.0f, 30000.0f, ImVec2(0, 80));
+		}
+	}
+
+	ImGui::Text("'X' to show/hide GUI");
+	ImGui::End();
+}
+
+void SssrSample::HandleInput()
+{
+	// If the mouse was not used by the GUI then it's for the camera
+	//
+	ImGuiIO& io = ImGui::GetIO();
+
+	static std::chrono::system_clock::time_point last = std::chrono::system_clock::now();
+	std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+	std::chrono::duration<double> diff = now - last;
+	last = now;
+
+	io.DeltaTime = static_cast<float>(diff.count());
+
+	if (ImGui::IsKeyPressed('X'))
+	{
+		m_bShowUI = !m_bShowUI;
+		ShowCursor(m_bShowUI);
+	}
+
+	if (ImGui::IsKeyPressed('Y'))
+	{
+		m_Node->Recompile();
+	}
+
+
+	if (io.WantCaptureMouse == false || !m_bShowUI)
+	{
+		if ((io.KeyCtrl == false) && (io.MouseDown[0] == true))
+		{
+			m_Yaw -= io.MouseDelta.x / 100.f;
+			m_Pitch += io.MouseDelta.y / 100.f;
+		}
+
+		// Choose camera movement depending on setting
+		//
+		if (m_CameraControlSelected == 0)
+		{
+			//  WASD
+			//
+			m_State.camera.UpdateCameraWASD(m_Yaw, m_Pitch, io.KeysDown, io.DeltaTime);
+		}
+		else if (m_CameraControlSelected == 1)
+		{
+			//  Orbiting
+			//
+			m_Distance -= (float)io.MouseWheel / 3.0f;
+			m_Distance = std::max<float>(m_Distance, 0.1f);
+
+			bool panning = (io.KeyCtrl == true) && (io.MouseDown[0] == true);
+
+			m_State.camera.UpdateCameraPolar(m_Yaw, m_Pitch, panning ? -io.MouseDelta.x / 100.0f : 0.0f, panning ? io.MouseDelta.y / 100.0f : 0.0f, m_Distance);
+		}
+		else
+		{
+			// Use a camera from the GLTF
+			// 
+			m_pGltfLoader->GetCamera(m_CameraControlSelected - 2, &m_State.camera);
+			m_Yaw = m_State.camera.GetYaw();
+			m_Pitch = m_State.camera.GetPitch();
+		}
 	}
 }
 
 void SssrSample::LoadScene(int sceneIndex)
 {
-	json scene = m_jsonConfigFile["scenes"][sceneIndex];
-
-	// release everything and load the GLTF, just the light json data, the rest (textures and geometry) will be done in the main loop
+	json scene = m_JsonConfigFile["scenes"][sceneIndex];
 	if (m_pGltfLoader != NULL)
 	{
-		m_pRenderer->UnloadScene();
-		m_pRenderer->OnDestroyWindowSizeDependentResources();
-		m_pRenderer->OnDestroy();
+		//free resources, unload the current scene, and load new scene...
+		m_Device.GPUFlush();
+
+		m_Node->UnloadScene();
+		m_Node->OnDestroyWindowSizeDependentResources();
+		m_Node->OnDestroy();
 		m_pGltfLoader->Unload();
-		m_pRenderer->OnCreate(&m_device, &m_swapChain, m_fontSize);
-		m_pRenderer->OnCreateWindowSizeDependentResources(&m_swapChain, m_Width, m_Height);
+		m_Node->OnCreate(&m_Device, &m_Swapchain);
+		m_Node->OnCreateWindowSizeDependentResources(&m_Swapchain, m_Width, m_Height);
 	}
 
 	delete(m_pGltfLoader);
 	m_pGltfLoader = new GLTFCommon();
+
 	if (m_pGltfLoader->Load(scene["directory"], scene["filename"]) == false)
 	{
 		MessageBox(NULL, "The selected model couldn't be found, please check the documentation", "Cauldron Panic!", MB_ICONERROR);
@@ -228,198 +351,197 @@ void SssrSample::LoadScene(int sceneIndex)
 #define LOAD(j, key, val) val = j.value(key, val)
 
 		// global settings
-		LOAD(scene, "TAA", m_UIState.bUseTAA);
-		LOAD(scene, "Bloom", m_UIState.bUseBloom);
-		LOAD(scene, "toneMapper", m_UIState.SelectedTonemapperIndex);
-		LOAD(scene, "skyDomeType", m_UIState.SelectedSkydomeTypeIndex);
-		LOAD(scene, "exposure", m_UIState.Exposure);
-		LOAD(scene, "iblFactor", m_UIState.IBLFactor);
-		LOAD(scene, "emmisiveFactor", m_UIState.EmissiveFactor);
-		LOAD(scene, "skyDomeType", m_UIState.SelectedSkydomeTypeIndex);
+		LOAD(scene, "toneMapper", m_State.toneMapper);
+		LOAD(scene, "skyDomeType", m_State.skyDomeType);
+		LOAD(scene, "exposure", m_State.exposure);
+		LOAD(scene, "iblFactor", m_State.iblFactor);
+		LOAD(scene, "emmisiveFactor", m_State.emmisiveFactor);
+		LOAD(scene, "skyDomeType", m_State.skyDomeType);
 
-		// Add a default light in case there are none
-		if (m_pGltfLoader->m_lights.size() == 0)
-		{
-			tfNode n;
-			n.m_transform.LookAt(PolarToVector(AMD_PI_OVER_2, 0.58f) * 3.5f, math::Vector4(0, 0, 0, 0));
+		// default light
+		m_State.lightIntensity = scene.value("intensity", 1.0f);
 
-			tfLight l;
-			l.m_type = tfLight::LIGHT_SPOTLIGHT;
-			l.m_intensity = scene.value("intensity", 1.0f);
-			l.m_color = math::Vector4(1.0f, 1.0f, 1.0f, 0.0f);
-			l.m_range = 15;
-			l.m_outerConeAngle = AMD_PI_OVER_4;
-			l.m_innerConeAngle = AMD_PI_OVER_4 * 0.9f;
-			l.m_shadowResolution = 1024;
-
-			m_pGltfLoader->AddLight(n, l);
-		}
-
-		// Allocate shadow information (if any)
-		m_pRenderer->AllocateShadowMaps(m_pGltfLoader);
-
-		// set default camera
+		// default camera (in case the gltf has none)
 		json camera = scene["camera"];
-		m_activeCamera = scene.value("activeCamera", m_activeCamera);
-		math::Vector4 from = GetVector(GetElementJsonArray(camera, "defaultFrom", { 0.0, 0.0, 10.0 }));
-		math::Vector4 to = GetVector(GetElementJsonArray(camera, "defaultTo", { 0.0, 0.0, 0.0 }));
-		m_camera.LookAt(from, to);
+		LOAD(camera, "yaw", m_Yaw);
+		LOAD(camera, "pitch", m_Pitch);
+		LOAD(camera, "distance", m_Distance);
+		XMVECTOR lookAt = GetVector(GetElementJsonArray(camera, "lookAt", { 0.0, 0.0, 0.0 }));
+		m_State.camera.LookAt(m_Yaw, m_Pitch, m_Distance, lookAt);
 
 		// set benchmarking state if enabled 
-		if (m_bIsBenchmarking)
+		if (m_State.isBenchmarking)
 		{
-			std::string deviceName;
-			std::string driverVersion;
-			m_device.GetDeviceInfo(&deviceName, &driverVersion);
-			BenchmarkConfig(scene["BenchmarkSettings"], m_activeCamera, m_pGltfLoader, deviceName, driverVersion);
+			BenchmarkConfig(scene["BenchmarkSettings"], -1, m_pGltfLoader);
 		}
 
 		// indicate the mainloop we started loading a GLTF and it needs to load the rest (textures and geometry)
-		m_loadingScene = true;
+		m_bLoadingScene = true;
 	}
 }
 
-void SssrSample::OnUpdate()
+//--------------------------------------------------------------------------------------
+//
+// OnResize
+//
+//--------------------------------------------------------------------------------------
+void SssrSample::OnResize(uint32_t width, uint32_t height)
 {
-	ImGuiIO& io = ImGui::GetIO();
-
-	//If the mouse was not used by the GUI then it's for the camera
-	if (io.WantCaptureMouse)
+	if (m_Width != width || m_Height != height)
 	{
-		io.MouseDelta.x = 0;
-		io.MouseDelta.y = 0;
-		io.MouseWheel = 0;
+		// Flush GPU
+		//
+		m_Device.GPUFlush();
+
+		// If resizing but no minimizing
+		//
+		if (m_Width > 0 && m_Height > 0)
+		{
+			if (m_Node != NULL)
+			{
+				m_Node->OnDestroyWindowSizeDependentResources();
+			}
+			m_Swapchain.OnDestroyWindowSizeDependentResources();
+		}
+
+		m_Width = width;
+		m_Height = height;
+
+		// if resizing but not minimizing the recreate it with the new size
+		//
+		if (m_Width > 0 && m_Height > 0)
+		{
+			m_Swapchain.OnCreateWindowSizeDependentResources(m_Width, m_Height, false, DISPLAYMODE_SDR);
+			if (m_Node != NULL)
+			{
+				m_Node->OnCreateWindowSizeDependentResources(&m_Swapchain, m_Width, m_Height);
+			}
+		}
 	}
-	
-	m_camera.SetSpeed(0.1f);
-
-	// Update Camera
-	UpdateCamera(m_camera, io);
-	if (m_UIState.bUseTAA)
-	{
-		static uint32_t Seed;
-		m_camera.SetProjectionJitter(m_Width, m_Height, Seed);
-	}
-
-	// Keyboard & Mouse
-	HandleInput(io);
-
-	// Animation Update
-	if (m_bPlay)
-		m_time += (float)m_deltaTime / 1000.0f; // animation time in seconds
-
-	if (m_pGltfLoader)
-	{
-		m_pGltfLoader->SetAnimationTime(0, m_time);
-		m_pGltfLoader->TransformScene(0, math::Matrix4::identity());
-	}
+	m_State.camera.SetFov(XM_PI / 4, m_Width, m_Height, 0.1f, 1000.0f);
 }
 
-void SssrSample::HandleInput(const ImGuiIO& io)
+void SssrSample::OnParseCommandLine(LPSTR lpCmdLine, uint32_t* pWidth, uint32_t* pHeight, bool* pbFullScreen)
 {
-	auto fnIsKeyTriggered = [&io](char key) { return io.KeysDown[key] && io.KeysDownDuration[key] == 0.0f; };
+	// First load configuration
+	std::ifstream f("config.json");
+	if (!f)
+	{
+		MessageBox(NULL, "Config file not found!\n", "Cauldron Panic!", MB_ICONERROR);
+		exit(-1);
+	}
+	f >> m_JsonConfigFile;
 
-	// Handle Keyboard/Mouse input here
+	// Parse command line and override the config file
+	try
+	{
+		if (strlen(lpCmdLine) > 0)
+		{
+			auto j3 = json::parse(lpCmdLine);
+			m_JsonConfigFile.merge_patch(j3);
+		}
+	}
+	catch (json::parse_error)
+	{
+		Trace("Error parsing commandline\n");
+		exit(0);
+	}
 
-	/* MAGNIFIER CONTROLS */
-	if (fnIsKeyTriggered('L'))                       m_UIState.ToggleMagnifierLock();
-	if (fnIsKeyTriggered('M') || io.MouseClicked[2]) m_UIState.bUseMagnifier ^= 1; // middle mouse / M key toggles magnifier
-
-	if (io.MouseClicked[1] && m_UIState.bUseMagnifier) // right mouse click
-		m_UIState.ToggleMagnifierLock();
+	// Set values
+	*pWidth = m_JsonConfigFile.value("width", 1920);
+	*pHeight = m_JsonConfigFile.value("height", 1080);
+	*pbFullScreen = m_JsonConfigFile.value("fullScreen", false);
+	m_State.isBenchmarking = m_JsonConfigFile.value("benchmark", false);
 }
 
-void SssrSample::UpdateCamera(Camera& cam, const ImGuiIO& io)
-{
-	float yaw = cam.GetYaw();
-	float pitch = cam.GetPitch();
-	float distance = cam.GetDistance();
-
-	cam.UpdatePreviousMatrices(); // set previous view matrix
-
-	// Sets Camera based on UI selection (WASD, Orbit or any of the GLTF cameras)
-	if ((io.KeyCtrl == false) && (io.MouseDown[0] == true))
-	{
-		yaw -= io.MouseDelta.x / 100.f;
-		pitch += io.MouseDelta.y / 100.f;
-	}
-
-	// Choose camera movement depending on setting
-	if (m_activeCamera == 0)
-	{
-		//  Orbiting
-		distance -= (float)io.MouseWheel / 3.0f;
-		distance = std::max<float>(distance, 0.1f);
-
-		bool panning = (io.KeyCtrl == true) && (io.MouseDown[0] == true);
-
-		cam.UpdateCameraPolar(yaw, pitch,
-			panning ? -io.MouseDelta.x / 100.0f : 0.0f,
-			panning ? io.MouseDelta.y / 100.0f : 0.0f,
-			distance);
-	}
-	else if (m_activeCamera == 1)
-	{
-		//  WASD
-		cam.UpdateCameraWASD(yaw, pitch, io.KeysDown, io.DeltaTime);
-	}
-	else if (m_activeCamera > 1)
-	{
-		// Use a camera from the GLTF
-		m_pGltfLoader->GetCamera(m_activeCamera - 2, &cam);
-	}
-}
-
+//--------------------------------------------------------------------------------------
+//
+// OnRender, updates the state from the UI, animates, transforms and renders the scene
+//
+//--------------------------------------------------------------------------------------
 void SssrSample::OnRender()
 {
-	// Do any start of frame necessities
-	BeginFrame();
+	// Get timings
+	//
+	double timeNow = MillisecondsNow();
+	m_DeltaTime = timeNow - m_LastFrameTime;
+	m_LastFrameTime = timeNow;
 
+	// Build UI and set the scene state. Note that the rendering of the UI happens later.
+	//    
 	ImGUI_UpdateIO();
 	ImGui::NewFrame();
 
-	if (m_loadingScene)
+	if (m_bLoadingScene)
 	{
-		// the scene loads in chunks, that way we can show a progress bar
 		static int loadingStage = 0;
-		loadingStage = m_pRenderer->LoadScene(m_pGltfLoader, loadingStage);
+		// LoadScene needs to be called a number of times, the scene is not fully loaded until it returns 0
+		// This is done so we can display a progress bar when the scene is loading
+		loadingStage = m_Node->LoadScene(m_pGltfLoader, loadingStage);
 		if (loadingStage == 0)
 		{
-			m_time = 0;
-			m_loadingScene = false;
+			m_Time = 0;
+			m_bLoadingScene = false;
 		}
 	}
-	else if (m_pGltfLoader && m_bIsBenchmarking)
+	else if (m_pGltfLoader && m_State.isBenchmarking)
 	{
-		// Benchmarking takes control of the time, and exits the app when the animation is done
-		std::vector<TimeStamp> timeStamps = m_pRenderer->GetTimingValues();
-		m_time = BenchmarkLoop(timeStamps, &m_camera, m_pRenderer->GetScreenshotFileName());
+		const std::vector<TimeStamp>& timeStamps = m_Node->GetTimingValues();
+		m_Time = BenchmarkLoop(timeStamps, &m_State.camera, &m_State.screenshotName);
 	}
 	else
 	{
-		BuildUI();  // UI logic. Note that the rendering of the UI happens later.
-		OnUpdate(); // Update camera, handle keyboard/mouse input
+		if (m_bShowUI)
+		{
+			BuildUI();
+		}
+
+		if (!m_bLoadingScene)
+		{
+			HandleInput();
+		}
 	}
 
-	// Do Render frame using AFR
-	m_pRenderer->OnRender(&m_UIState, m_camera, &m_swapChain);
+	// Set animation time
+	//
+	if (m_bPlay)
+	{
+		m_Time += (float)m_DeltaTime / 1000.0f;
+	}
 
-	// Framework will handle Present and some other end of frame logic
-	EndFrame();
+	// Animate and transform the scene
+	//
+	if (m_pGltfLoader)
+	{
+		m_pGltfLoader->SetAnimationTime(0, m_Time);
+		m_pGltfLoader->TransformScene(0, XMMatrixIdentity());
+	}
+
+	m_State.time = m_Time;
+
+	// Do Render frame using AFR 
+	//
+	m_Node->OnRender(&m_State, &m_Swapchain);
+
+#ifdef _DEBUG
+	// workaround for hang in device debug layer.
+	m_Device.GPUFlush();
+#endif
+	m_Swapchain.Present();
 }
 
+//--------------------------------------------------------------------------------------
+	//
+	// WinMain
+	//
+	//--------------------------------------------------------------------------------------
 int WINAPI WinMain(
 	_In_ HINSTANCE hInstance,
 	_In_opt_ HINSTANCE hPrevInstance,
 	_In_ LPSTR lpCmdLine,
 	_In_ int nCmdShow)
 {
-#ifdef _DEBUG
-	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-#endif // _DEBUG
-
-
-	LPCSTR Name = "FidelityFX Stochastic Screen Space Reflection Sample DX12 v1.3";
+	LPCSTR Name = "FidelityFX Stochastic Screen Space Reflection Sample DX12 v1.2";
 	// create new sample
 	return RunFramework(hInstance, lpCmdLine, nCmdShow, new SssrSample(Name));
 }
