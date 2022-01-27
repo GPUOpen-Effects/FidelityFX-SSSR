@@ -6,7 +6,3 @@
 
 // TODO: reference any additional headers you need in STDAFX.H
 // and not in this file
-
-#pragma comment(lib,"d3dcompiler.lib")
-#pragma comment(lib, "D3D12.lib")
-

@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -25,12 +25,24 @@ THE SOFTWARE.
 
 [numthreads(1, 1, 1)]
 void main() {
-    uint ray_count = g_ray_counter[0];
-    
-    g_intersect_args[0] = (ray_count + 63) / 64;
-    g_intersect_args[1] = 1;
-    g_intersect_args[2] = 1;
+    { // Prepare intersection args
+        uint ray_count = g_ray_counter[0];
+        
+        g_intersect_args[0] = (ray_count + 63) / 64;
+        g_intersect_args[1] = 1;
+        g_intersect_args[2] = 1;
 
-    g_ray_counter[0] = 0;
-    g_ray_counter[1] = ray_count;
+        g_ray_counter[0] = 0;
+        g_ray_counter[1] = ray_count;
+    }
+    { // Prepare denoiser args
+        uint tile_count = g_ray_counter[2];
+    
+        g_intersect_args[3] = tile_count;
+        g_intersect_args[4] = 1;
+        g_intersect_args[5] = 1;
+
+        g_ray_counter[2] = 0;
+        g_ray_counter[3] = tile_count;
+    }
 }

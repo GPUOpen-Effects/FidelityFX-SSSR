@@ -1,5 +1,5 @@
 /**********************************************************************
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -27,7 +27,7 @@ namespace SSSR_SAMPLE_VK
 	struct ShaderPass {
 		VkPipeline						pipeline;
 		VkPipelineLayout                pipelineLayout;
-		uint32_t bindings_count;
+		uint32_t						bindingsCount;
 		VkDescriptorSetLayout           descriptorSetLayout;
 		std::vector<VkDescriptorSet>	descriptorSets;
 		void OnDestroy(VkDevice device, ResourceViewHeaps* resourceHeap);

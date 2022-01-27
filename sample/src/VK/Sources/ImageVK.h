@@ -19,15 +19,44 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ********************************************************************/
-#include "stdafx.h"
-#include "BlueNoiseSampler.h"
+#pragma once
 
-namespace SSSR_SAMPLE_DX12
+#include "Base/Texture.h"
+
+#include <vulkan/vulkan.h>
+using namespace CAULDRON_VK;
+namespace SSSR_SAMPLE_VK
 {
-	void BlueNoiseSamplerD3D12::OnDestroy()
+	/**
+		The ImageVK class is a helper class to track image layouts on Vulkan.
+	*/
+	class ImageVK
 	{
-		sobolBuffer.Release();
-		rankingTileBuffer.Release();
-		scramblingTileBuffer.Release();
-	}
+	public:
+		struct CreateInfo
+		{
+			VkFormat format;
+			uint32_t width;
+			uint32_t height;
+		};
+
+		ImageVK();
+		~ImageVK();
+
+		ImageVK(Device* pDevice, const CreateInfo& createInfo, const char* name);
+		void OnDestroy();
+
+		ImageVK(ImageVK&& other) noexcept;
+		ImageVK& ImageVK::operator =(ImageVK&& other) noexcept;
+
+		VkImageMemoryBarrier Transition(VkImageLayout after);
+		VkImage Resource() const;
+		VkImageView View() const;
+
+	private:
+		VkDevice m_device;
+		Texture m_texture;
+		VkImageView m_view;
+		VkImageLayout m_currentLayout;
+	};
 }
